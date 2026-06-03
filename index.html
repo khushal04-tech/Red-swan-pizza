@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShiftDesk — Employee Time Clock</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --ink:#1a1a18;
+  --ink2:#4a4a45;
+  --ink3:#8a8a82;
+  --ink4:#b8b8b0;
+  --paper:#f5f4ef;
+  --paper2:#eceae3;
+  --paper3:#e2e0d7;
+  --line:#d0cec5;
+  --line2:#bcb9af;
+  --amber:#c8740a;
+  --amber-lt:#fdf3e7;
+  --amber-md:#f0a83a;
+  --green:#1a7a4a;
+  --green-lt:#e8f5ee;
+  --green-md:#2db368;
+  --red:#c0342a;
+  --red-lt:#fdf0ef;
+  --red-md:#e05a50;
+  --blue:#1a4a7a;
+  --blue-lt:#eef3fb;
+  --blue-md:#3a82d8;
+  --r:6px;
+  --r-lg:10px;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',sans-serif;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 4px 12px rgba(0,0,0,.06);
+  --shadow-lg:0 2px 8px rgba(0,0,0,.1),0 8px 24px rgba(0,0,0,.08);
+}
+
+html{font-size:16px}
+body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height:100vh;display:flex;flex-direction:column;line-height:1.5}
+
+/* ─── HEADER ─── */
+#app-header{
+  background:var(--ink);
+  color:#f0ede6;
+  padding:0 2rem;
+  display:flex;align-items:center;justify-content:space-between;
+  height:58px;
+  position:sticky;top:0;z-index:50;
+}
+.app-logo{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:1rem;font-weight:600;letter-spacing:.04em}
+.logo-mark{
+  width:30px;height:30px;background:var(--amber-md);
+  display:flex;align-items:center;justify-content:center;
+  border-radius:5px;font-size:15px;
+}
+.live-time{font-family:var(--mono);font-size:1.1rem;color:var(--amber-md);letter-spacing:.06em}
+.header-mode{
+  display:flex;gap:2px;background:rgba(255,255,255,.1);
+  padding:3px;border-radius:7px;
+}
+.mode-btn{
+  padding:5px 14px;border:none;background:transparent;
+  color:rgba(255,255,255,.6);font-family:var(--mono);font-size:.75rem;
+  font-weight:500;letter-spacing:.05em;text-transform:uppercase;
+  border-radius:5px;cursor:pointer;transition:all .2s;
+}
+.mode-btn.active{background:var(--amber);color:#fff}
+.mode-btn:hover:not(.active){color:#fff;background:rgba(255,255,255,.12)}
+
+/* ─── LAYOUT ─── */
+#app-body{flex:1;display:flex;flex-direction:column}
+.view{display:none;flex:1;padding:2rem;max-width:1080px;margin:0 auto;width:100%}
+.view.active{display:block}
+
+/* ─── CARDS ─── */
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);padding:1.5rem;box-shadow:var(--shadow)}
+.card+.card{margin-top:1.5rem}
+.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem}
+.card-title{font-family:var(--mono);font-size:.72rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+
+/* ─── STAT TILES ─── */
+.stat-tile{background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);padding:1.2rem 1.4rem;box-shadow:var(--shadow)}
+.stat-val{font-family:var(--mono);font-size:1.9rem;font-weight:500;color:var(--ink);line-height:1;margin-bottom:.3rem}
+.stat-lbl{font-size:.75rem;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase;font-weight:500}
+.stat-tile.accent-amber{border-left:3px solid var(--amber-md)}
+.stat-tile.accent-green{border-left:3px solid var(--green-md)}
+.stat-tile.accent-blue{border-left:3px solid var(--blue-md)}
+.stat-tile.accent-red{border-left:3px solid var(--red-md)}
+
+/* ─── FORMS ─── */
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:1rem}
+.field:last-child{margin-bottom:0}
+.field label{font-size:.78rem;font-weight:600;color:var(--ink2);letter-spacing:.04em;text-transform:uppercase}
+.field input,.field select,.field textarea{
+  background:var(--paper);border:1px solid var(--line2);
+  color:var(--ink);font-family:var(--sans);font-size:.92rem;
+  padding:9px 12px;border-radius:var(--r);outline:none;
+  transition:border-color .2s,box-shadow .2s;width:100%;
+}
+.field input:focus,.field select:focus,.field textarea:focus{
+  border-color:var(--amber);
+  box-shadow:0 0 0 3px rgba(200,116,10,.12);
+}
+.field select option{background:#fff}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem}
+
+/* ─── BUTTONS ─── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:9px 18px;border-radius:var(--r);border:none;
+  font-family:var(--sans);font-size:.88rem;font-weight:600;
+  cursor:pointer;transition:all .18s;letter-spacing:.01em;white-space:nowrap;
+}
+.btn-primary{background:var(--ink);color:#fff}
+.btn-primary:hover{background:#333;transform:translateY(-1px);box-shadow:var(--shadow)}
+.btn-amber{background:var(--amber);color:#fff}
+.btn-amber:hover{background:#a86008;transform:translateY(-1px);box-shadow:0 4px 12px rgba(200,116,10,.3)}
+.btn-green{background:var(--green);color:#fff}
+.btn-green:hover{background:#146038;transform:translateY(-1px)}
+.btn-red{background:var(--red);color:#fff}
+.btn-red:hover{background:#a02820}
+.btn-ghost{background:transparent;color:var(--ink2);border:1px solid var(--line2)}
+.btn-ghost:hover{background:var(--paper2);border-color:var(--ink4)}
+.btn-sm{padding:6px 12px;font-size:.8rem}
+.btn-lg{padding:13px 26px;font-size:1rem}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none !important;box-shadow:none !important}
+.btn-full{width:100%}
+
+/* big clock buttons */
+.punch-btn{
+  width:100%;padding:1.2rem;border-radius:var(--r-lg);
+  font-size:1rem;font-weight:700;letter-spacing:.04em;
+  border:none;cursor:pointer;transition:all .22s;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  font-family:var(--mono);
+}
+.punch-in{background:var(--green);color:#fff}
+.punch-in:hover{background:#146038;transform:translateY(-2px);box-shadow:0 6px 18px rgba(26,122,74,.25)}
+.punch-out{background:var(--red);color:#fff}
+.punch-out:hover{background:#a02820;transform:translateY(-2px);box-shadow:0 6px 18px rgba(192,52,42,.25)}
+.punch-btn:disabled{opacity:.35;cursor:not-allowed;transform:none !important;box-shadow:none !important}
+
+/* ─── BADGES ─── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.badge-green{background:var(--green-lt);color:var(--green)}
+.badge-red{background:var(--red-lt);color:var(--red)}
+.badge-amber{background:var(--amber-lt);color:var(--amber)}
+.badge-blue{background:var(--blue-lt);color:var(--blue)}
+.badge-dot{width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block}
+
+/* ─── TABLE ─── */
+.tbl-wrap{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:.875rem}
+.tbl th{
+  text-align:left;padding:9px 13px;
+  background:var(--paper);
+  color:var(--ink3);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;
+  border-bottom:1px solid var(--line);font-weight:600;font-family:var(--mono);
+  position:sticky;top:0;
+}
+.tbl td{padding:11px 13px;border-bottom:1px solid var(--line);vertical-align:middle;color:var(--ink)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--paper)}
+.tbl .mono{font-family:var(--mono);font-size:.82rem}
+.tbl-empty{text-align:center;padding:2.5rem!important;color:var(--ink3)!important;font-style:italic}
+
+/* ─── EMPLOYEE LIST ─── */
+.emp-item{
+  display:flex;align-items:center;gap:12px;
+  padding:11px 14px;
+  border-bottom:1px solid var(--line);
+  transition:background .15s;
+}
+.emp-item:last-child{border-bottom:none}
+.emp-item:hover{background:var(--paper)}
+.avatar{
+  width:36px;height:36px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:600;font-size:.82rem;flex-shrink:0;font-family:var(--mono);
+}
+.emp-meta{flex:1;min-width:0}
+.emp-name-txt{font-weight:600;font-size:.93rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.emp-id-txt{font-family:var(--mono);font-size:.73rem;color:var(--ink3)}
+
+/* ─── MODAL ─── */
+.modal-bg{
+  display:none;position:fixed;inset:0;
+  background:rgba(26,26,24,.55);
+  z-index:200;align-items:center;justify-content:center;
+  backdrop-filter:blur(2px);
+}
+.modal-bg.open{display:flex}
+.modal{
+  background:#fff;border-radius:12px;padding:2rem;
+  width:500px;max-width:94vw;max-height:90vh;overflow-y:auto;
+  box-shadow:var(--shadow-lg);animation:modalIn .18s ease;
+}
+@keyframes modalIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+.modal-title{font-family:var(--mono);font-size:.82rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);margin-bottom:1.25rem}
+.modal-title span{font-size:1.1rem;font-weight:700;color:var(--ink);display:block;margin-top:2px;text-transform:none;letter-spacing:0;font-family:var(--sans)}
+.modal-actions{display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--line)}
+
+/* ─── RECEIPT ─── */
+.receipt{
+  font-family:var(--mono);background:#fff;color:#111;
+  padding:1.75rem;border:1px dashed #ccc;border-radius:4px;
+  font-size:.82rem;max-width:340px;margin:0 auto;
+}
+.rcpt-logo{text-align:center;font-size:1rem;font-weight:600;letter-spacing:.12em;margin-bottom:.5rem}
+.rcpt-sub{text-align:center;font-size:.68rem;color:#777;margin-bottom:.75rem}
+.rcpt-hr{border:none;border-top:1px dashed #bbb;margin:.6rem 0}
+.rcpt-row{display:flex;justify-content:space-between;align-items:center;padding:1.5px 0}
+.rcpt-total{font-weight:600;font-size:.9rem;margin-top:.5rem}
+.rcpt-foot{text-align:center;font-size:.65rem;color:#999;margin-top:.75rem}
+
+/* ─── TOAST ─── */
+#toast{
+  position:fixed;bottom:1.5rem;right:1.5rem;z-index:500;
+  display:flex;flex-direction:column;gap:8px;
+  pointer-events:none;
+}
+.toast-item{
+  background:var(--ink);color:#f0ede6;
+  padding:11px 18px;border-radius:var(--r);
+  font-size:.86rem;box-shadow:var(--shadow-lg);
+  display:flex;align-items:center;gap:8px;
+  animation:toastIn .25s ease;max-width:320px;
+}
+@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+.toast-item.success{border-left:3px solid var(--green-md)}
+.toast-item.error{border-left:3px solid var(--red-md)}
+.toast-item.info{border-left:3px solid var(--amber-md)}
+
+/* ─── WEEK BAR ─── */
+.week-bar-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.week-bar-row:last-child{border-bottom:none}
+.week-bar-name{width:160px;flex-shrink:0;font-size:.88rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.week-bar-track{flex:1;height:8px;background:var(--paper3);border-radius:4px;overflow:hidden}
+.week-bar-fill{height:100%;border-radius:4px;background:var(--amber-md);transition:width .5s ease}
+.week-bar-val{width:68px;flex-shrink:0;text-align:right;font-family:var(--mono);font-size:.78rem;color:var(--ink2)}
+
+/* ─── DIVIDER ─── */
+.section-gap{height:1.5rem}
+
+/* ─── ALERTS ─── */
+.alert{padding:11px 15px;border-radius:var(--r);font-size:.86rem;margin-bottom:1rem}
+.alert-info{background:var(--blue-lt);color:var(--blue);border:1px solid rgba(58,130,216,.2)}
+.alert-success{background:var(--green-lt);color:var(--green);border:1px solid rgba(45,179,104,.2)}
+.alert-warn{background:var(--amber-lt);color:var(--amber);border:1px solid rgba(200,116,10,.2)}
+
+/* ─── TABS ─── */
+.tab-bar{display:flex;gap:0;border-bottom:2px solid var(--line);margin-bottom:1.5rem}
+.tab-btn{
+  padding:9px 18px;border:none;background:transparent;
+  font-family:var(--sans);font-size:.86rem;font-weight:600;
+  color:var(--ink3);cursor:pointer;transition:all .15s;
+  border-bottom:2px solid transparent;margin-bottom:-2px;
+}
+.tab-btn.active{color:var(--amber);border-bottom-color:var(--amber)}
+.tab-btn:hover:not(.active){color:var(--ink);background:var(--paper)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* ─── PRINT ─── */
+@media print{
+  #app-header,#app-body > *:not(#print-shell){display:none!important}
+  #print-shell{display:block!important;padding:2rem}
+}
+#print-shell{display:none}
+
+/* ─── SEPARATOR LINE ─── */
+.sep{border:none;border-top:1px solid var(--line);margin:1.25rem 0}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header id="app-header">
+  <div class="app-logo">
+    <div class="logo-mark">⏱</div>
+    ShiftDesk
+  </div>
+  <div class="header-mode">
+    <button class="mode-btn active" id="mode-emp-btn" onclick="setMode('employee')">Employee</button>
+    <button class="mode-btn" id="mode-mgr-btn" onclick="setMode('manager')">Manager</button>
+  </div>
+  <div class="live-time" id="live-time">00:00:00</div>
+</header>
+
+<!-- VIEWS -->
+<div id="app-body">
+
+  <!-- ══════════════════ EMPLOYEE VIEW ══════════════════ -->
+  <div class="view active" id="view-employee">
+    <div class="grid-2">
+
+      <!-- Clock In/Out Panel -->
+      <div>
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">Clock In / Out</span>
+            <span id="today-date-lbl" style="font-family:var(--mono);font-size:.75rem;color:var(--ink3)"></span>
+          </div>
+          <div class="field">
+            <label>Employee Name</label>
+            <input type="text" id="emp-name-input" placeholder="Enter your full name" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>Employee ID</label>
+            <input type="text" id="emp-id-input" placeholder="e.g. EMP-001" autocomplete="off">
+          </div>
+          <div id="emp-verify-msg" style="margin-bottom:1rem"></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="punch-btn punch-in" id="btn-clock-in" onclick="doPunchIn()" disabled>
+              ▶ &nbsp;Clock In
+            </button>
+            <button class="punch-btn punch-out" id="btn-clock-out" onclick="doPunchOut()" disabled>
+              ■ &nbsp;Clock Out
+            </button>
+          </div>
+        </div>
+
+        <!-- Today Status -->
+        <div class="card" style="margin-top:1.5rem">
+          <div class="card-hd"><span class="card-title">Your Status Today</span></div>
+          <div id="emp-today-status">
+            <p style="color:var(--ink3);font-size:.9rem">Enter your name and ID above to see your status.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Today Log + Week -->
+      <div>
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">Today's Shifts</span>
+          </div>
+          <div id="emp-today-log">
+            <p style="color:var(--ink3);font-size:.9rem">No shifts shown yet.</p>
+          </div>
+        </div>
+        <div class="card" style="margin-top:1.5rem">
+          <div class="card-hd"><span class="card-title">This Week — My Hours</span></div>
+          <div id="emp-week-summary">
+            <p style="color:var(--ink3);font-size:.9rem">Enter your details above.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════ MANAGER VIEW ══════════════════ -->
+  <div class="view" id="view-manager">
+
+    <!-- Stats Row -->
+    <div class="grid-4" style="margin-bottom:1.5rem">
+      <div class="stat-tile accent-amber">
+        <div class="stat-val" id="st-employees">0</div>
+        <div class="stat-lbl">Employees</div>
+      </div>
+      <div class="stat-tile accent-green">
+        <div class="stat-val" id="st-active">0</div>
+        <div class="stat-lbl">Clocked In Now</div>
+      </div>
+      <div class="stat-tile accent-blue">
+        <div class="stat-val" id="st-today-h">0h</div>
+        <div class="stat-lbl">Hours Today</div>
+      </div>
+      <div class="stat-tile accent-red" style="border-left-color:var(--blue-md)">
+        <div class="stat-val" id="st-week-h">0h</div>
+        <div class="stat-lbl">Hours This Week</div>
+      </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="mgTab('employees',this)">Employees</button>
+      <button class="tab-btn" onclick="mgTab('daily',this)">Daily Report</button>
+      <button class="tab-btn" onclick="mgTab('weekly',this)">Weekly Report</button>
+      <button class="tab-btn" onclick="mgTab('entries',this)">All Entries</button>
+      <button class="tab-btn" onclick="mgTab('editentry',this)">Edit Hours</button>
+    </div>
+
+    <!-- ── TAB: Employees ── -->
+    <div class="tab-panel active" id="tp-employees">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">Employee Roster</span>
+            <button class="btn btn-amber btn-sm" onclick="openAddEmpModal()">+ Add Employee</button>
+          </div>
+          <div id="emp-roster"></div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title">Currently Clocked In</span></div>
+          <div id="active-now-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB: Daily Report ── -->
+    <div class="tab-panel" id="tp-daily">
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">Daily Report</span>
+          <div style="display:flex;align-items:center;gap:.75rem">
+            <input type="date" id="daily-date-picker" style="font-family:var(--mono);font-size:.83rem;padding:7px 10px;border:1px solid var(--line2);border-radius:var(--r);background:var(--paper);color:var(--ink);outline:none;cursor:pointer" onchange="renderDailyReport()">
+            <button class="btn btn-ghost btn-sm" onclick="printDaily()">🖨 Print</button>
+          </div>
+        </div>
+        <div id="daily-report-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.25rem"></div>
+        <div class="tbl-wrap"><div id="daily-report-table"></div></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: Weekly Report ── -->
+    <div class="tab-panel" id="tp-weekly">
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">Weekly Report</span>
+          <div style="display:flex;align-items:center;gap:.75rem">
+            <button class="btn btn-ghost btn-sm" onclick="weekOffset--;renderWeeklyReport()">‹ Prev</button>
+            <span id="week-range-lbl" style="font-family:var(--mono);font-size:.75rem;color:var(--ink3);white-space:nowrap"></span>
+            <button class="btn btn-ghost btn-sm" onclick="weekOffset++;renderWeeklyReport()">Next ›</button>
+            <button class="btn btn-ghost btn-sm" onclick="printWeekly()">🖨 Print</button>
+          </div>
+        </div>
+        <div id="weekly-bars" style="margin-bottom:1.5rem"></div>
+        <div class="tbl-wrap"><div id="weekly-table"></div></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: All Entries ── -->
+    <div class="tab-panel" id="tp-entries">
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">All Time Entries</span>
+          <div style="display:flex;align-items:center;gap:.75rem">
+            <select id="filter-emp-select" onchange="renderAllEntries()" style="font-size:.83rem;padding:7px 10px;border:1px solid var(--line2);border-radius:var(--r);background:var(--paper);color:var(--ink);outline:none;min-width:180px">
+              <option value="">All Employees</option>
+            </select>
+            <input type="date" id="filter-date-from" placeholder="From" style="font-size:.83rem;padding:7px 10px;border:1px solid var(--line2);border-radius:var(--r);background:var(--paper);color:var(--ink);outline:none" onchange="renderAllEntries()">
+            <input type="date" id="filter-date-to" placeholder="To" style="font-size:.83rem;padding:7px 10px;border:1px solid var(--line2);border-radius:var(--r);background:var(--paper);color:var(--ink);outline:none" onchange="renderAllEntries()">
+          </div>
+        </div>
+        <div class="tbl-wrap"><div id="all-entries-table"></div></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: Edit Hours ── -->
+    <div class="tab-panel" id="tp-editentry">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-hd"><span class="card-title">Add / Edit Entry</span></div>
+          <p class="alert alert-warn">Use this panel to correct missed clock-ins or adjust incorrect times.</p>
+          <div class="field">
+            <label>Employee</label>
+            <select id="edit-emp-sel">
+              <option value="">— Select Employee —</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Date</label>
+            <input type="date" id="edit-date-in">
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Clock-In Time</label>
+              <input type="time" id="edit-time-in">
+            </div>
+            <div class="field">
+              <label>Clock-Out Time</label>
+              <input type="time" id="edit-time-out" placeholder="Leave blank if still active">
+            </div>
+          </div>
+          <input type="hidden" id="edit-entry-id">
+          <div style="display:flex;gap:.75rem">
+            <button class="btn btn-amber btn-full" onclick="saveEditEntry()">Save Entry</button>
+            <button class="btn btn-ghost" onclick="clearEditForm()">Clear</button>
+          </div>
+          <div id="edit-msg" style="margin-top:.75rem"></div>
+        </div>
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">Recent Entries — Click to Edit</span>
+            <select id="edit-filter-emp" onchange="renderEditTable()" style="font-size:.82rem;padding:6px 10px;border:1px solid var(--line2);border-radius:var(--r);background:var(--paper);outline:none">
+              <option value="">All Employees</option>
+            </select>
+          </div>
+          <div class="tbl-wrap" style="max-height:420px;overflow-y:auto"><div id="edit-entries-table"></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- MODAL: Add/Edit Employee -->
+<div class="modal-bg" id="modal-emp">
+  <div class="modal">
+    <div class="modal-title">
+      Employee<span id="modal-emp-heading">Add Employee</span>
+    </div>
+    <div class="field"><label>Full Name</label><input type="text" id="memp-name" placeholder="Jane Smith"></div>
+    <div class="field"><label>Employee ID</label><input type="text" id="memp-id" placeholder="EMP-001"></div>
+    <input type="hidden" id="memp-rec-id">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-emp')">Cancel</button>
+      <button class="btn btn-amber" onclick="saveEmployee()">Save Employee</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Confirm Remove Employee -->
+<div class="modal-bg" id="modal-remove-emp">
+  <div class="modal">
+    <div class="modal-title">Remove Employee<span id="remove-emp-name-lbl"></span></div>
+    <p style="color:var(--ink2);font-size:.92rem;margin-bottom:1rem">This will permanently remove this employee from the system. Their time entries will be preserved for records.</p>
+    <input type="hidden" id="remove-emp-id">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-remove-emp')">Cancel</button>
+      <button class="btn btn-red" onclick="confirmRemoveEmployee()">Remove</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Receipt -->
+<div class="modal-bg" id="modal-receipt">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">Shift Receipt<span>Clock-Out Confirmation</span></div>
+    <div id="receipt-inner"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-receipt')">Close</button>
+      <button class="btn btn-primary" onclick="doPrintReceipt()">🖨 Print Receipt</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Confirm Delete Entry -->
+<div class="modal-bg" id="modal-del-entry">
+  <div class="modal">
+    <div class="modal-title">Delete Entry<span>Are you sure?</span></div>
+    <p style="color:var(--ink2);font-size:.92rem">This time entry will be permanently deleted and cannot be recovered.</p>
+    <input type="hidden" id="del-entry-id">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-del-entry')">Cancel</button>
+      <button class="btn btn-red" onclick="confirmDelEntry()">Delete Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toast"></div>
+
+<!-- PRINT SHELL -->
+<div id="print-shell"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════════════
+const STORE_KEY = 'shiftdesk_v1';
+
+const AVATAR_COLORS = [
+  {bg:'#e8f0fb',fg:'#1a4a7a'},{bg:'#e8f5ee',fg:'#1a7a4a'},
+  {bg:'#fdf3e7',fg:'#c8740a'},{bg:'#fdf0ef',fg:'#c0342a'},
+  {bg:'#f0eefb',fg:'#4a2a9a'},{bg:'#e8f8f5',fg:'#1a6a5a'},
+  {bg:'#fdf5e7',fg:'#8a5a0a'},{bg:'#f5eef8',fg:'#7a2a8a'},
+];
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return {
+    employees:[
+      {id:'e1',name:'Meet',empId:'001',colorIdx:0},
+      {id:'e2',name:'Kushveer', empId:'002',colorIdx:1},
+      {id:'e3',name:'Alpesh', empId:'003',colorIdx:2},
+    ],
+    entries:[],
+    nextEid:4,
+    nextEntId:1,
+  };
+}
+
+function saveState(){localStorage.setItem(STORE_KEY,JSON.stringify(DB))}
+let DB = loadState();
+
+// ═══════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════
+function todayStr(){return new Date().toISOString().slice(0,10)}
+function nowTimeStr(){const d=new Date();return pad(d.getHours())+':'+pad(d.getMinutes())}
+function pad(n){return String(n).padStart(2,'0')}
+
+function fmtDate(s){
+  if(!s)return'—';
+  const [y,m,d]=s.split('-');
+  const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return mo[+m-1]+' '+parseInt(d)+', '+y;
+}
+function fmtTime(t){
+  if(!t)return'—';
+  const[h,m]=t.split(':').map(Number);
+  return (h%12||12)+':'+pad(m)+' '+(h>=12?'PM':'AM');
+}
+function fmtHours(h){
+  if(h===null||h===undefined||isNaN(h)||h<0)return'—';
+  return Math.floor(h)+'h '+pad(Math.round((h%1)*60))+'m';
+}
+function calcH(inT,outT){
+  if(!inT||!outT)return null;
+  const[ih,im]=inT.split(':').map(Number);
+  const[oh,om]=outT.split(':').map(Number);
+  const diff=(oh*60+om)-(ih*60+im);
+  return diff/60;
+}
+function getInitials(name){return name.split(' ').map(p=>p[0]).join('').toUpperCase().slice(0,2)}
+function getAC(idx){return AVATAR_COLORS[idx%AVATAR_COLORS.length]}
+
+function getWeekRange(offset=0){
+  const d=new Date();
+  const dow=d.getDay();
+  const mon=new Date(d);
+  mon.setDate(d.getDate()-((dow+6)%7)+offset*7);
+  const sun=new Date(mon);
+  sun.setDate(mon.getDate()+6);
+  return{start:mon.toISOString().slice(0,10),end:sun.toISOString().slice(0,10)};
+}
+function inRange(date,s,e){return date>=s&&date<=e}
+
+function uid(){return 'id_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)}
+
+function getEmpById(id){return DB.employees.find(e=>e.id===id)}
+function getEmpByEmpId(empId){return DB.employees.find(e=>e.empId.toLowerCase()===empId.toLowerCase())}
+function getEmpByNameId(name,empId){
+  return DB.employees.find(e=>
+    e.name.toLowerCase()===name.toLowerCase() &&
+    e.empId.toLowerCase()===empId.toLowerCase()
+  );
+}
+
+// ═══════════════════════════════════════════════
+//  LIVE CLOCK
+// ═══════════════════════════════════════════════
+let weekOffset=0;
+function startClock(){
+  function tick(){
+    const d=new Date();
+    document.getElementById('live-time').textContent=
+      pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+    document.getElementById('today-date-lbl').textContent=fmtDate(todayStr());
+  }
+  tick(); setInterval(tick,1000);
+}
+startClock();
+
+// ═══════════════════════════════════════════════
+//  MODE SWITCH
+// ═══════════════════════════════════════════════
+function setMode(m){
+  document.getElementById('view-employee').classList.toggle('active',m==='employee');
+  document.getElementById('view-manager').classList.toggle('active',m==='manager');
+  document.getElementById('mode-emp-btn').classList.toggle('active',m==='employee');
+  document.getElementById('mode-mgr-btn').classList.toggle('active',m==='manager');
+  if(m==='manager')renderManager();
+}
+
+// ═══════════════════════════════════════════════
+//  MANAGER TABS
+// ═══════════════════════════════════════════════
+function mgTab(name,el){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tp-'+name).classList.add('active');
+  if(name==='daily')renderDailyReport();
+  if(name==='weekly')renderWeeklyReport();
+  if(name==='entries')renderAllEntries();
+  if(name==='editentry'){renderEditTable();populateEmpSelects()}
+}
+
+// ═══════════════════════════════════════════════
+//  EMPLOYEE INPUT & CLOCK IN/OUT
+// ═══════════════════════════════════════════════
+let empInputTimeout=null;
+document.getElementById('emp-name-input').addEventListener('input',debounceEmpVerify);
+document.getElementById('emp-id-input').addEventListener('input',debounceEmpVerify);
+
+function debounceEmpVerify(){
+  clearTimeout(empInputTimeout);
+  empInputTimeout=setTimeout(verifyAndUpdateEmpStatus,300);
+}
+
+function verifyAndUpdateEmpStatus(){
+  const name=document.getElementById('emp-name-input').value.trim();
+  const eid=document.getElementById('emp-id-input').value.trim();
+  const msgEl=document.getElementById('emp-verify-msg');
+  const inBtn=document.getElementById('btn-clock-in');
+  const outBtn=document.getElementById('btn-clock-out');
+
+  if(!name||!eid){
+    msgEl.innerHTML='';inBtn.disabled=true;outBtn.disabled=true;
+    resetEmpPanels();return;
+  }
+  const emp=getEmpByNameId(name,eid);
+  if(!emp){
+    msgEl.innerHTML='<div class="alert" style="background:var(--red-lt);color:var(--red);border:1px solid rgba(192,52,42,.2);margin:0">Employee not found. Please check your name and ID.</div>';
+    inBtn.disabled=true;outBtn.disabled=true;
+    resetEmpPanels();return;
+  }
+
+  const ac=getAC(emp.colorIdx);
+  msgEl.innerHTML=`<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--green-lt);border:1px solid rgba(45,179,104,.2);border-radius:var(--r);margin:0">
+    <div class="avatar" style="width:30px;height:30px;background:${ac.bg};color:${ac.fg};font-size:.75rem">${getInitials(emp.name)}</div>
+    <span style="color:var(--green);font-weight:600;font-size:.88rem">✓ Welcome, ${emp.name}</span>
+    <span class="badge badge-blue" style="margin-left:auto">${emp.empId}</span>
+  </div>`;
+
+  const open=DB.entries.find(e=>e.recId===emp.id&&e.date===todayStr()&&!e.out);
+  if(open){
+    inBtn.disabled=true;outBtn.disabled=false;
+  }else{
+    inBtn.disabled=false;outBtn.disabled=true;
+  }
+  renderEmpTodayStatus(emp.id);
+  renderEmpTodayLog(emp.id);
+  renderEmpWeekSummary(emp.id);
+}
+
+function resetEmpPanels(){
+  document.getElementById('emp-today-status').innerHTML='<p style="color:var(--ink3);font-size:.9rem">Enter your name and ID above to see your status.</p>';
+  document.getElementById('emp-today-log').innerHTML='<p style="color:var(--ink3);font-size:.9rem">No shifts shown yet.</p>';
+  document.getElementById('emp-week-summary').innerHTML='<p style="color:var(--ink3);font-size:.9rem">Enter your details above.</p>';
+}
+
+function getCurrentEmp(){
+  const name=document.getElementById('emp-name-input').value.trim();
+  const eid=document.getElementById('emp-id-input').value.trim();
+  return getEmpByNameId(name,eid);
+}
+
+function doPunchIn(){
+  const emp=getCurrentEmp();
+  if(!emp)return;
+  DB.entries.push({id:uid(),recId:emp.id,date:todayStr(),in:nowTimeStr(),out:null,edited:false});
+  saveState();
+  verifyAndUpdateEmpStatus();
+  toast('Clocked in successfully!','success');
+}
+
+function doPunchOut(){
+  const emp=getCurrentEmp();
+  if(!emp)return;
+  const entry=DB.entries.find(e=>e.recId===emp.id&&e.date===todayStr()&&!e.out);
+  if(!entry)return;
+  entry.out=nowTimeStr();
+  saveState();
+  verifyAndUpdateEmpStatus();
+  showReceipt(entry);
+  toast('Clocked out. Receipt ready.','info');
+}
+
+function renderEmpTodayStatus(recId){
+  const emp=getEmpById(recId);
+  const todayE=DB.entries.filter(e=>e.recId===recId&&e.date===todayStr());
+  const total=todayE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  const open=todayE.find(e=>!e.out);
+  const ac=getAC(emp.colorIdx);
+  document.getElementById('emp-today-status').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+      <div style="background:var(--paper);padding:.9rem 1rem;border-radius:var(--r);text-align:center">
+        <div style="font-family:var(--mono);font-size:1.4rem;font-weight:500">${fmtHours(total)}</div>
+        <div style="font-size:.72rem;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Today's Total</div>
+      </div>
+      <div style="background:var(--paper);padding:.9rem 1rem;border-radius:var(--r);text-align:center">
+        <div style="font-family:var(--mono);font-size:1.4rem;font-weight:500">${todayE.length}</div>
+        <div style="font-size:.72rem;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Shifts Today</div>
+      </div>
+    </div>
+    <div style="font-size:.86rem;color:var(--ink2)">
+      Status: ${open?`<span class="badge badge-green"><span class="badge-dot"></span> Clocked in since ${fmtTime(open.in)}</span>`:'<span class="badge badge-red"><span class="badge-dot"></span> Not clocked in</span>'}
+    </div>`;
+}
+
+function renderEmpTodayLog(recId){
+  const todayE=DB.entries.filter(e=>e.recId===recId&&e.date===todayStr());
+  const el=document.getElementById('emp-today-log');
+  if(!todayE.length){el.innerHTML='<p style="color:var(--ink3);font-size:.9rem">No shifts today.</p>';return}
+  el.innerHTML=`<table class="tbl">
+    <thead><tr><th>#</th><th>In</th><th>Out</th><th>Hours</th><th>Note</th></tr></thead>
+    <tbody>${todayE.map((e,i)=>{
+      const h=calcH(e.in,e.out);
+      return`<tr>
+        <td class="mono" style="color:var(--ink3)">${i+1}</td>
+        <td class="mono">${fmtTime(e.in)}</td>
+        <td class="mono">${e.out?fmtTime(e.out):'<span style="color:var(--amber)">Active</span>'}</td>
+        <td class="mono">${h!==null?fmtHours(h):'—'}</td>
+        <td>${e.edited?'<span class="badge badge-amber">Edited</span>':''}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+function renderEmpWeekSummary(recId){
+  const{start,end}=getWeekRange(0);
+  const weekE=DB.entries.filter(e=>e.recId===recId&&inRange(e.date,start,end));
+  const total=weekE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  const days=[...new Set(weekE.map(e=>e.date))].length;
+  document.getElementById('emp-week-summary').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
+      <div style="background:var(--paper);padding:.9rem;border-radius:var(--r);text-align:center">
+        <div style="font-family:var(--mono);font-size:1.3rem;font-weight:500">${fmtHours(total)}</div>
+        <div style="font-size:.7rem;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Total</div>
+      </div>
+      <div style="background:var(--paper);padding:.9rem;border-radius:var(--r);text-align:center">
+        <div style="font-family:var(--mono);font-size:1.3rem;font-weight:500">${days}</div>
+        <div style="font-size:.7rem;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Days</div>
+      </div>
+      <div style="background:var(--paper);padding:.9rem;border-radius:var(--r);text-align:center">
+        <div style="font-family:var(--mono);font-size:1.3rem;font-weight:500">${weekE.length}</div>
+        <div style="font-size:.7rem;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Shifts</div>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════
+//  RECEIPT
+// ═══════════════════════════════════════════════
+let _lastReceiptHtml='';
+function showReceipt(entry){
+  const emp=getEmpById(entry.recId);
+  const h=calcH(entry.in,entry.out);
+  const now=new Date();
+  _lastReceiptHtml=`<div class="receipt">
+    <div class="rcpt-logo">SHIFTDESK</div>
+    <div class="rcpt-sub">CLOCK-OUT RECEIPT</div>
+    <hr class="rcpt-hr">
+    <div class="rcpt-row"><span>Employee</span><span>${emp.name}</span></div>
+    <div class="rcpt-row"><span>Employee ID</span><span>${emp.empId}</span></div>
+    <hr class="rcpt-hr">
+    <div class="rcpt-row"><span>Date</span><span>${fmtDate(entry.date)}</span></div>
+    <div class="rcpt-row"><span>Clock In</span><span>${fmtTime(entry.in)}</span></div>
+    <div class="rcpt-row"><span>Clock Out</span><span>${fmtTime(entry.out)}</span></div>
+    <hr class="rcpt-hr">
+    <div class="rcpt-row rcpt-total"><span>Total Hours</span><span>${fmtHours(h)}</span></div>
+    <hr class="rcpt-hr">
+    <div class="rcpt-foot">Printed: ${now.toLocaleString()}<br>Thank you for your hard work today!</div>
+  </div>`;
+  document.getElementById('receipt-inner').innerHTML=_lastReceiptHtml;
+  openModal('modal-receipt');
+}
+function doPrintReceipt(){
+  document.getElementById('print-shell').innerHTML=_lastReceiptHtml;
+  window.print();
+}
+
+// ═══════════════════════════════════════════════
+//  MANAGER: RENDER ALL
+// ═══════════════════════════════════════════════
+function renderManager(){
+  renderStats();
+  renderEmpRoster();
+  renderActiveNow();
+  populateEmpSelects();
+  // init date pickers
+  const dp=document.getElementById('daily-date-picker');
+  if(!dp.value)dp.value=todayStr();
+}
+
+function renderStats(){
+  const active=DB.entries.filter(e=>e.date===todayStr()&&!e.out).length;
+  const todayH=DB.entries.filter(e=>e.date===todayStr()).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  const{start,end}=getWeekRange(0);
+  const weekH=DB.entries.filter(e=>inRange(e.date,start,end)).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  document.getElementById('st-employees').textContent=DB.employees.length;
+  document.getElementById('st-active').textContent=active;
+  document.getElementById('st-today-h').textContent=Math.round(todayH*10)/10+'h';
+  document.getElementById('st-week-h').textContent=Math.round(weekH*10)/10+'h';
+}
+
+function renderEmpRoster(){
+  const el=document.getElementById('emp-roster');
+  if(!DB.employees.length){el.innerHTML='<p style="color:var(--ink3);font-size:.9rem;padding:.5rem 0">No employees. Add one to get started.</p>';return}
+  el.innerHTML=DB.employees.map(emp=>{
+    const ac=getAC(emp.colorIdx);
+    const active=DB.entries.find(e=>e.recId===emp.id&&e.date===todayStr()&&!e.out);
+    return`<div class="emp-item">
+      <div class="avatar" style="background:${ac.bg};color:${ac.fg}">${getInitials(emp.name)}</div>
+      <div class="emp-meta">
+        <div class="emp-name-txt">${emp.name}</div>
+        <div class="emp-id-txt">${emp.empId}</div>
+      </div>
+      ${active?'<span class="badge badge-green"><span class="badge-dot"></span>Active</span>':'<span class="badge" style="background:var(--paper2);color:var(--ink3)">Off</span>'}
+      <button class="btn btn-ghost btn-sm" onclick="openEditEmpModal('${emp.id}')" title="Edit">✎</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="openRemoveEmpModal('${emp.id}')" title="Remove">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function renderActiveNow(){
+  const active=DB.entries.filter(e=>e.date===todayStr()&&!e.out);
+  const el=document.getElementById('active-now-list');
+  if(!active.length){el.innerHTML='<p style="color:var(--ink3);font-size:.9rem;padding:.5rem 0">No employees currently clocked in.</p>';return}
+  el.innerHTML=active.map(e=>{
+    const emp=getEmpById(e.recId);
+    if(!emp)return'';
+    const ac=getAC(emp.colorIdx);
+    const elapsed=calcH(e.in,nowTimeStr());
+    return`<div class="emp-item">
+      <div class="avatar" style="background:${ac.bg};color:${ac.fg}">${getInitials(emp.name)}</div>
+      <div class="emp-meta">
+        <div class="emp-name-txt">${emp.name}</div>
+        <div class="emp-id-txt">Since ${fmtTime(e.in)}</div>
+      </div>
+      <span style="font-family:var(--mono);font-size:.78rem;color:var(--ink2)">${elapsed!==null?fmtHours(elapsed):'—'}</span>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+//  DAILY REPORT
+// ═══════════════════════════════════════════════
+function renderDailyReport(){
+  const date=document.getElementById('daily-date-picker').value||todayStr();
+  const dayE=DB.entries.filter(e=>e.date===date);
+  const uniqueEmps=[...new Set(dayE.map(e=>e.recId))];
+  const totalH=dayE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+
+  document.getElementById('daily-report-stats').innerHTML=`
+    <div class="stat-tile accent-blue" style="box-shadow:none">
+      <div class="stat-val">${uniqueEmps.length}</div><div class="stat-lbl">Employees</div>
+    </div>
+    <div class="stat-tile accent-green" style="box-shadow:none">
+      <div class="stat-val">${dayE.length}</div><div class="stat-lbl">Total Shifts</div>
+    </div>
+    <div class="stat-tile accent-amber" style="box-shadow:none">
+      <div class="stat-val">${Math.round(totalH*10)/10}h</div><div class="stat-lbl">Total Hours</div>
+    </div>`;
+
+  if(!dayE.length){
+    document.getElementById('daily-report-table').innerHTML='<p style="color:var(--ink3);font-size:.9rem;padding:1rem 0">No entries for '+fmtDate(date)+'.</p>';
+    return;
+  }
+
+  // Group by employee
+  const rows=uniqueEmps.map(recId=>{
+    const emp=getEmpById(recId);
+    if(!emp)return'';
+    const empE=dayE.filter(e=>e.recId===recId);
+    const empH=empE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+    return`<tr>
+      <td>${emp.name}</td>
+      <td class="mono" style="color:var(--ink3)">${emp.empId}</td>
+      <td class="mono">${empE.map(e=>fmtTime(e.in)).join(', ')}</td>
+      <td class="mono">${empE.map(e=>e.out?fmtTime(e.out):'<span style="color:var(--amber)">Active</span>').join(', ')}</td>
+      <td class="mono" style="font-weight:600">${fmtHours(empH)}</td>
+      <td>${empE.some(e=>e.edited)?'<span class="badge badge-amber">Edited</span>':''}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('daily-report-table').innerHTML=`
+    <table class="tbl">
+      <thead><tr><th>Name</th><th>ID</th><th>Clock In(s)</th><th>Clock Out(s)</th><th>Hours</th><th>Note</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function printDaily(){
+  const date=document.getElementById('daily-date-picker').value||todayStr();
+  const dayE=DB.entries.filter(e=>e.date===date);
+  const uniqueEmps=[...new Set(dayE.map(e=>e.recId))];
+  const totalH=dayE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  const rows=uniqueEmps.map(recId=>{
+    const emp=getEmpById(recId);
+    if(!emp)return'';
+    const empE=dayE.filter(e=>e.recId===recId);
+    const empH=empE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+    return`<tr><td>${emp.name}</td><td>${emp.empId}</td><td>${empE.map(e=>fmtTime(e.in)).join(', ')}</td><td>${empE.map(e=>e.out?fmtTime(e.out):'Active').join(', ')}</td><td>${fmtHours(empH)}</td></tr>`;
+  }).join('');
+  document.getElementById('print-shell').innerHTML=`
+    <style>table{width:100%;border-collapse:collapse}th,td{padding:8px 12px;border:1px solid #ccc;text-align:left}th{background:#f5f5f5}h2{margin-bottom:12px}p{margin-bottom:16px}</style>
+    <h2>ShiftDesk — Daily Report</h2>
+    <p>${fmtDate(date)} &bull; ${uniqueEmps.length} employees &bull; ${Math.round(totalH*10)/10}h total</p>
+    <table><thead><tr><th>Name</th><th>ID</th><th>In</th><th>Out</th><th>Hours</th></tr></thead><tbody>${rows}</tbody></table>`;
+  window.print();
+}
+
+// ═══════════════════════════════════════════════
+//  WEEKLY REPORT
+// ═══════════════════════════════════════════════
+function renderWeeklyReport(){
+  const{start,end}=getWeekRange(weekOffset);
+  document.getElementById('week-range-lbl').textContent=fmtDate(start)+' — '+fmtDate(end);
+  const weekE=DB.entries.filter(e=>inRange(e.date,start,end));
+  const maxH=Math.max(...DB.employees.map(emp=>weekE.filter(e=>e.recId===emp.id).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0)),1);
+
+  // Bar chart
+  document.getElementById('weekly-bars').innerHTML=DB.employees.map(emp=>{
+    const empE=weekE.filter(e=>e.recId===emp.id);
+    const h=empE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+    const pct=maxH>0?Math.min(h/maxH*100,100):0;
+    const ac=getAC(emp.colorIdx);
+    return`<div class="week-bar-row">
+      <div class="week-bar-name">${emp.name}</div>
+      <div class="week-bar-track"><div class="week-bar-fill" style="width:${pct.toFixed(1)}%;background:${ac.fg}"></div></div>
+      <div class="week-bar-val">${fmtHours(h)}</div>
+    </div>`;
+  }).join('');
+
+  // Table: one row per employee, columns = days of week
+  const days=[];
+  for(let i=0;i<7;i++){
+    const d=new Date(start);d.setDate(d.getDate()+i);
+    days.push(d.toISOString().slice(0,10));
+  }
+  const dayLabels=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const thead=`<tr><th>Employee</th>${dayLabels.map((l,i)=>`<th>${l}<br><span style="font-weight:400;color:var(--ink4)">${days[i].slice(5)}</span></th>`).join('')}<th>Total</th></tr>`;
+  const tbody=DB.employees.map(emp=>{
+    const dayCells=days.map(day=>{
+      const dayE=weekE.filter(e=>e.recId===emp.id&&e.date===day);
+      const h=dayE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+      return`<td class="mono">${h>0?fmtHours(h):'—'}</td>`;
+    });
+    const total=weekE.filter(e=>e.recId===emp.id).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+    return`<tr><td>${emp.name}</td>${dayCells.join('')}<td class="mono" style="font-weight:600">${fmtHours(total)}</td></tr>`;
+  }).join('');
+  document.getElementById('weekly-table').innerHTML=`<table class="tbl"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+}
+
+function printWeekly(){
+  const{start,end}=getWeekRange(weekOffset);
+  const weekE=DB.entries.filter(e=>inRange(e.date,start,end));
+  const days=[];
+  for(let i=0;i<7;i++){const d=new Date(start);d.setDate(d.getDate()+i);days.push(d.toISOString().slice(0,10))}
+  const dl=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const rows=DB.employees.map(emp=>{
+    const cells=days.map(day=>{const h=weekE.filter(e=>e.recId===emp.id&&e.date===day).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);return`<td>${h>0?fmtHours(h):'—'}</td>`}).join('');
+    const total=weekE.filter(e=>e.recId===emp.id).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+    return`<tr><td>${emp.name}</td><td>${emp.empId}</td>${cells}<td><strong>${fmtHours(total)}</strong></td></tr>`;
+  }).join('');
+  document.getElementById('print-shell').innerHTML=`
+    <style>table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:6px 10px;border:1px solid #ccc;text-align:left}th{background:#f5f5f5}h2{margin-bottom:8px}p{margin-bottom:12px}</style>
+    <h2>ShiftDesk — Weekly Report</h2>
+    <p>${fmtDate(start)} — ${fmtDate(end)}</p>
+    <table><thead><tr><th>Employee</th><th>ID</th>${dl.map((l,i)=>`<th>${l} ${days[i].slice(5)}</th>`).join('')}<th>Total</th></tr></thead><tbody>${rows}</tbody></table>`;
+  window.print();
+}
+
+// ═══════════════════════════════════════════════
+//  ALL ENTRIES TABLE
+// ═══════════════════════════════════════════════
+function renderAllEntries(){
+  const empFilter=document.getElementById('filter-emp-select').value;
+  const dateFrom=document.getElementById('filter-date-from').value;
+  const dateTo=document.getElementById('filter-date-to').value;
+  let entries=[...DB.entries].sort((a,b)=>(b.date+b.in).localeCompare(a.date+a.in));
+  if(empFilter)entries=entries.filter(e=>e.recId===empFilter);
+  if(dateFrom)entries=entries.filter(e=>e.date>=dateFrom);
+  if(dateTo)entries=entries.filter(e=>e.date<=dateTo);
+  const el=document.getElementById('all-entries-table');
+  if(!entries.length){el.innerHTML='<p style="color:var(--ink3);font-size:.9rem;padding:1rem 0">No entries found for the selected filters.</p>';return}
+  el.innerHTML=`<table class="tbl">
+    <thead><tr><th>Date</th><th>Employee</th><th>ID</th><th>In</th><th>Out</th><th>Hours</th><th>Note</th></tr></thead>
+    <tbody>${entries.map(e=>{
+      const emp=getEmpById(e.recId);
+      const h=calcH(e.in,e.out);
+      return`<tr>
+        <td class="mono">${fmtDate(e.date)}</td>
+        <td>${emp?emp.name:'<span style="color:var(--ink3)">Unknown</span>'}</td>
+        <td class="mono" style="color:var(--ink3)">${emp?emp.empId:'—'}</td>
+        <td class="mono">${fmtTime(e.in)}</td>
+        <td class="mono">${e.out?fmtTime(e.out):'<span style="color:var(--amber)">Active</span>'}</td>
+        <td class="mono">${h!==null?fmtHours(h):'—'}</td>
+        <td>${e.edited?'<span class="badge badge-amber">Edited</span>':''}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+// ═══════════════════════════════════════════════
+//  EDIT ENTRIES TABLE
+// ═══════════════════════════════════════════════
+function renderEditTable(){
+  const empFilter=document.getElementById('edit-filter-emp').value;
+  let entries=[...DB.entries].sort((a,b)=>(b.date+b.in).localeCompare(a.date+a.in)).slice(0,80);
+  if(empFilter)entries=entries.filter(e=>e.recId===empFilter);
+  const el=document.getElementById('edit-entries-table');
+  if(!entries.length){el.innerHTML='<p style="color:var(--ink3);font-size:.9rem;padding:1rem 0">No entries.</p>';return}
+  el.innerHTML=`<table class="tbl">
+    <thead><tr><th>Date</th><th>Employee</th><th>In</th><th>Out</th><th>Hours</th><th></th></tr></thead>
+    <tbody>${entries.map(e=>{
+      const emp=getEmpById(e.recId);
+      const h=calcH(e.in,e.out);
+      return`<tr style="cursor:pointer" onclick="loadEntryForEdit('${e.id}')">
+        <td class="mono">${fmtDate(e.date)}</td>
+        <td>${emp?emp.name:'—'}</td>
+        <td class="mono">${fmtTime(e.in)}</td>
+        <td class="mono">${e.out?fmtTime(e.out):'<span style="color:var(--amber)">Active</span>'}</td>
+        <td class="mono">${h!==null?fmtHours(h):'—'}</td>
+        <td><button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="event.stopPropagation();openDelEntryModal('${e.id}')">✕</button></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+function loadEntryForEdit(entryId){
+  const entry=DB.entries.find(e=>e.id===entryId);
+  if(!entry)return;
+  document.getElementById('edit-emp-sel').value=entry.recId;
+  document.getElementById('edit-date-in').value=entry.date;
+  document.getElementById('edit-time-in').value=entry.in;
+  document.getElementById('edit-time-out').value=entry.out||'';
+  document.getElementById('edit-entry-id').value=entry.id;
+  document.getElementById('edit-msg').innerHTML='<div class="alert alert-info">Loaded entry for editing. Make changes and click Save.</div>';
+}
+
+function saveEditEntry(){
+  const recId=document.getElementById('edit-emp-sel').value;
+  const date=document.getElementById('edit-date-in').value;
+  const inT=document.getElementById('edit-time-in').value;
+  const outT=document.getElementById('edit-time-out').value;
+  const existingId=document.getElementById('edit-entry-id').value;
+  const msgEl=document.getElementById('edit-msg');
+
+  if(!recId||!date||!inT){
+    msgEl.innerHTML='<div class="alert" style="background:var(--red-lt);color:var(--red);border:1px solid rgba(192,52,42,.15)">Please fill in Employee, Date, and Clock-In time.</div>';
+    return;
+  }
+
+  if(existingId){
+    const entry=DB.entries.find(e=>e.id===existingId);
+    if(entry){
+      entry.recId=recId;entry.date=date;entry.in=inT;
+      entry.out=outT||null;entry.edited=true;
+    }
+  }else{
+    DB.entries.push({id:uid(),recId,date,in:inT,out:outT||null,edited:true});
+  }
+
+  saveState();
+  renderEditTable();
+  renderStats();
+  msgEl.innerHTML='<div class="alert alert-success">✓ Entry saved successfully.</div>';
+  setTimeout(()=>{msgEl.innerHTML=''},3000);
+  clearEditForm();
+  toast('Entry saved.','success');
+}
+
+function clearEditForm(){
+  document.getElementById('edit-emp-sel').value='';
+  document.getElementById('edit-date-in').value=todayStr();
+  document.getElementById('edit-time-in').value='';
+  document.getElementById('edit-time-out').value='';
+  document.getElementById('edit-entry-id').value='';
+}
+
+// ═══════════════════════════════════════════════
+//  EMPLOYEE CRUD
+// ═══════════════════════════════════════════════
+function openAddEmpModal(){
+  document.getElementById('modal-emp-heading').textContent='Add Employee';
+  document.getElementById('memp-name').value='';
+  document.getElementById('memp-id').value='EMP-00'+DB.nextEid;
+  document.getElementById('memp-rec-id').value='';
+  openModal('modal-emp');
+}
+
+function openEditEmpModal(id){
+  const emp=getEmpById(id);
+  document.getElementById('modal-emp-heading').textContent='Edit — '+emp.name;
+  document.getElementById('memp-name').value=emp.name;
+  document.getElementById('memp-id').value=emp.empId;
+  document.getElementById('memp-rec-id').value=id;
+  openModal('modal-emp');
+}
+
+function saveEmployee(){
+  const name=document.getElementById('memp-name').value.trim();
+  const empId=document.getElementById('memp-id').value.trim();
+  const recId=document.getElementById('memp-rec-id').value;
+  if(!name||!empId){toast('Name and Employee ID are required.','error');return}
+
+  // Check duplicate ID
+  const dup=DB.employees.find(e=>e.empId.toLowerCase()===empId.toLowerCase()&&e.id!==recId);
+  if(dup){toast('Employee ID already in use by '+dup.name,'error');return}
+
+  if(recId){
+    const emp=getEmpById(recId);
+    emp.name=name;emp.empId=empId;
+  }else{
+    DB.employees.push({id:'e'+DB.nextEid++,name,empId,colorIdx:DB.employees.length%AVATAR_COLORS.length});
+  }
+  saveState();
+  closeModal('modal-emp');
+  renderManager();
+  toast(recId?'Employee updated.':'Employee added.','success');
+}
+
+function openRemoveEmpModal(id){
+  const emp=getEmpById(id);
+  document.getElementById('remove-emp-name-lbl').textContent=' — '+emp.name;
+  document.getElementById('remove-emp-id').value=id;
+  openModal('modal-remove-emp');
+}
+
+function confirmRemoveEmployee(){
+  const id=document.getElementById('remove-emp-id').value;
+  DB.employees=DB.employees.filter(e=>e.id!==id);
+  saveState();
+  closeModal('modal-remove-emp');
+  renderManager();
+  toast('Employee removed. Time entries preserved.','info');
+}
+
+function openDelEntryModal(entryId){
+  document.getElementById('del-entry-id').value=entryId;
+  openModal('modal-del-entry');
+}
+
+function confirmDelEntry(){
+  const id=document.getElementById('del-entry-id').value;
+  DB.entries=DB.entries.filter(e=>e.id!==id);
+  saveState();
+  closeModal('modal-del-entry');
+  renderEditTable();
+  renderStats();
+  toast('Entry deleted.','info');
+}
+
+// ═══════════════════════════════════════════════
+//  POPULATE SELECTS
+// ═══════════════════════════════════════════════
+function populateEmpSelects(){
+  const ids=['edit-emp-sel','filter-emp-select','edit-filter-emp'];
+  ids.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    const cur=el.value;
+    const opt0=id==='filter-emp-select'||id==='edit-filter-emp'?'<option value="">All Employees</option>':'<option value="">— Select Employee —</option>';
+    el.innerHTML=opt0+DB.employees.map(e=>`<option value="${e.id}"${cur===e.id?' selected':''}>${e.name} (${e.empId})</option>`).join('');
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  MODAL HELPERS
+// ═══════════════════════════════════════════════
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+// Close on background click
+document.querySelectorAll('.modal-bg').forEach(bg=>{
+  bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('open')});
+});
+
+// ═══════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════
+function toast(msg,type='info'){
+  const t=document.getElementById('toast');
+  const el=document.createElement('div');
+  el.className='toast-item '+type;
+  el.textContent=msg;
+  t.appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .3s';setTimeout(()=>el.remove(),350)},3200);
+}
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+populateEmpSelects();
+document.getElementById('edit-date-in').value=todayStr();
+document.getElementById('daily-date-picker').value=todayStr();
+</script>
+</body>
+</html>
