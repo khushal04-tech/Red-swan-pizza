@@ -290,7 +290,7 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height
   </div>
   <div class="header-mode">
     <button class="mode-btn active" id="mode-emp-btn" onclick="setMode('employee')">Employee</button>
-    <button class="mode-btn" id="mode-mgr-btn" onclick="setMode('manager')">Manager</button>
+    <button class="mode-btn" id="mode-mgr-btn" onclick="setMode('manager')">🔒 Manager</button>
   </div>
   <div class="live-time" id="live-time">00:00:00</div>
 </header>
@@ -360,6 +360,12 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height
 
   <!-- ══════════════════ MANAGER VIEW ══════════════════ -->
   <div class="view" id="view-manager">
+
+    <!-- Manager Header Bar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div style="font-size:.82rem;color:var(--ink3);font-family:var(--mono)">🔓 Manager Mode</div>
+      <button class="btn btn-ghost btn-sm" onclick="lockManager()">🔒 Lock &amp; Exit</button>
+    </div>
 
     <!-- Stats Row -->
     <div class="grid-4" style="margin-bottom:1.5rem">
@@ -559,6 +565,22 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height
   </div>
 </div>
 
+<!-- MODAL: Manager Login -->
+<div class="modal-bg" id="modal-mgr-login">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">Manager Access<span>Enter PIN to continue</span></div>
+    <div class="field">
+      <label>Manager PIN</label>
+      <input type="password" id="mgr-pin-input" placeholder="Enter PIN" maxlength="20" autocomplete="off" onkeydown="if(event.key==='Enter')verifyManagerPin()">
+    </div>
+    <div id="mgr-pin-msg" style="margin-bottom:.5rem"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-mgr-login')">Cancel</button>
+      <button class="btn btn-amber" onclick="verifyManagerPin()">Unlock</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST CONTAINER -->
 <div id="toast"></div>
 
@@ -581,7 +603,11 @@ const AVATAR_COLORS = [
 function loadState(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
-    if(raw) return JSON.parse(raw);
+    if(raw){
+      const data=JSON.parse(raw);
+      if(!data.managerPin)data.managerPin='1234';
+      return data;
+    }
   }catch(e){
     console.error('Failed to load saved state from localStorage:', e);
     toast('Warning: Could not load saved data. Starting fresh.','error');
@@ -595,6 +621,7 @@ function loadState(){
     entries:[],
     nextEid:4,
     nextEntId:1,
+    managerPin:'1234',
   };
 }
 
@@ -669,6 +696,59 @@ function getEmpByNameId(name,empId){
   );
 }
 
+// ─── SHARED UTILITIES ───
+function sumHours(entries){
+  return entries.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+}
+function getOpenEntry(recId){
+  return DB.entries.find(e=>e.recId===recId&&e.date===todayStr()&&!e.out);
+}
+function renderAvatar(emp,size){
+  const ac=getAC(emp.colorIdx);
+  const s=size||36;
+  const fs=size?'.75rem':'.82rem';
+  return `<div class="avatar" style="width:${s}px;height:${s}px;background:${ac.bg};color:${ac.fg};font-size:${fs}">${getInitials(emp.name)}</div>`;
+}
+function emptyState(msg,padding){
+  const pad=padding||'0';
+  return `<p style="color:var(--ink3);font-size:.9rem;padding:${pad}">${msg}</p>`;
+}
+function sortEntriesDesc(entries){
+  return [...entries].sort((a,b)=>(b.date+b.in).localeCompare(a.date+a.in));
+}
+function printStyles(){
+  return `<style>table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:7px 11px;border:1px solid #ccc;text-align:left}th{background:#f5f5f5}h2{margin-bottom:10px}p{margin-bottom:14px}</style>`;
+}
+function getDailyReportData(date){
+  const dayE=DB.entries.filter(e=>e.date===date);
+  const uniqueEmps=[...new Set(dayE.map(e=>e.recId))];
+  const totalH=sumHours(dayE);
+  const rows=uniqueEmps.map(recId=>{
+    const emp=getEmpById(recId);
+    if(!emp)return null;
+    const empE=dayE.filter(e=>e.recId===recId);
+    const empH=sumHours(empE);
+    return{emp,empE,empH};
+  }).filter(Boolean);
+  return{dayE,uniqueEmps,totalH,rows};
+}
+function getWeeklyReportData(offset){
+  const{start,end}=getWeekRange(offset);
+  const weekE=DB.entries.filter(e=>inRange(e.date,start,end));
+  const days=[];
+  for(let i=0;i<7;i++){const d=new Date(start);d.setDate(d.getDate()+i);days.push(d.toISOString().slice(0,10))}
+  const empData=DB.employees.map(emp=>{
+    const empWeekE=weekE.filter(e=>e.recId===emp.id);
+    const total=sumHours(empWeekE);
+    const perDay=days.map(day=>{
+      const dayE=empWeekE.filter(e=>e.date===day);
+      return sumHours(dayE);
+    });
+    return{emp,total,perDay,empWeekE};
+  });
+  return{start,end,weekE,days,empData};
+}
+
 // ═══════════════════════════════════════════════
 //  LIVE CLOCK
 // ═══════════════════════════════════════════════
@@ -687,12 +767,39 @@ startClock();
 // ═══════════════════════════════════════════════
 //  MODE SWITCH
 // ═══════════════════════════════════════════════
+let mgrAuthenticated=false;
 function setMode(m){
+  if(m==='manager'&&!mgrAuthenticated){
+    document.getElementById('mgr-pin-input').value='';
+    document.getElementById('mgr-pin-msg').innerHTML='';
+    openModal('modal-mgr-login');
+    setTimeout(()=>document.getElementById('mgr-pin-input').focus(),100);
+    return;
+  }
   document.getElementById('view-employee').classList.toggle('active',m==='employee');
   document.getElementById('view-manager').classList.toggle('active',m==='manager');
   document.getElementById('mode-emp-btn').classList.toggle('active',m==='employee');
   document.getElementById('mode-mgr-btn').classList.toggle('active',m==='manager');
   if(m==='manager')renderManager();
+  if(m==='employee')mgrAuthenticated=false;
+}
+function verifyManagerPin(){
+  const pin=document.getElementById('mgr-pin-input').value;
+  if(pin===DB.managerPin){
+    mgrAuthenticated=true;
+    closeModal('modal-mgr-login');
+    setMode('manager');
+    toast('Manager access granted.','success');
+  }else{
+    document.getElementById('mgr-pin-msg').innerHTML='<div class="alert" style="background:var(--red-lt);color:var(--red);border:1px solid rgba(192,52,42,.2);margin:0">Incorrect PIN. Please try again.</div>';
+    document.getElementById('mgr-pin-input').value='';
+    document.getElementById('mgr-pin-input').focus();
+  }
+}
+function lockManager(){
+  mgrAuthenticated=false;
+  setMode('employee');
+  toast('Manager view locked.','info');
 }
 
 // ═══════════════════════════════════════════════
@@ -739,14 +846,13 @@ function verifyAndUpdateEmpStatus(){
     resetEmpPanels();return;
   }
 
-  const ac=getAC(emp.colorIdx);
   msgEl.innerHTML=`<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--green-lt);border:1px solid rgba(45,179,104,.2);border-radius:var(--r);margin:0">
-    <div class="avatar" style="width:30px;height:30px;background:${ac.bg};color:${ac.fg};font-size:.75rem">${getInitials(emp.name)}</div>
+    ${renderAvatar(emp,30)}
     <span style="color:var(--green);font-weight:600;font-size:.88rem">✓ Welcome, ${emp.name}</span>
     <span class="badge badge-blue" style="margin-left:auto">${emp.empId}</span>
   </div>`;
 
-  const open=DB.entries.find(e=>e.recId===emp.id&&e.date===todayStr()&&!e.out);
+  const open=getOpenEntry(emp.id);
   if(open){
     inBtn.disabled=true;outBtn.disabled=false;
   }else{
@@ -758,9 +864,9 @@ function verifyAndUpdateEmpStatus(){
 }
 
 function resetEmpPanels(){
-  document.getElementById('emp-today-status').innerHTML='<p style="color:var(--ink3);font-size:.9rem">Enter your name and ID above to see your status.</p>';
-  document.getElementById('emp-today-log').innerHTML='<p style="color:var(--ink3);font-size:.9rem">No shifts shown yet.</p>';
-  document.getElementById('emp-week-summary').innerHTML='<p style="color:var(--ink3);font-size:.9rem">Enter your details above.</p>';
+  document.getElementById('emp-today-status').innerHTML=emptyState('Enter your name and ID above to see your status.');
+  document.getElementById('emp-today-log').innerHTML=emptyState('No shifts shown yet.');
+  document.getElementById('emp-week-summary').innerHTML=emptyState('Enter your details above.');
 }
 
 function getCurrentEmp(){
@@ -772,7 +878,7 @@ function getCurrentEmp(){
 function doPunchIn(){
   const emp=getCurrentEmp();
   if(!emp){toast('Cannot clock in: employee not verified.','error');return}
-  const existing=DB.entries.find(e=>e.recId===emp.id&&e.date===todayStr()&&!e.out);
+  const existing=getOpenEntry(emp.id);
   if(existing){toast('Already clocked in. Please clock out first.','error');return}
   DB.entries.push({id:uid(),recId:emp.id,date:todayStr(),in:nowTimeStr(),out:null,edited:false});
   saveState();
@@ -783,7 +889,7 @@ function doPunchIn(){
 function doPunchOut(){
   const emp=getCurrentEmp();
   if(!emp){toast('Cannot clock out: employee not verified.','error');return}
-  const entry=DB.entries.find(e=>e.recId===emp.id&&e.date===todayStr()&&!e.out);
+  const entry=getOpenEntry(emp.id);
   if(!entry){toast('No active shift found to clock out of.','error');return}
   entry.out=nowTimeStr();
   saveState();
@@ -796,9 +902,8 @@ function renderEmpTodayStatus(recId){
   const emp=getEmpById(recId);
   if(!emp){console.warn('renderEmpTodayStatus: employee not found for id', recId);return}
   const todayE=DB.entries.filter(e=>e.recId===recId&&e.date===todayStr());
-  const total=todayE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  const total=sumHours(todayE);
   const open=todayE.find(e=>!e.out);
-  const ac=getAC(emp.colorIdx);
   document.getElementById('emp-today-status').innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
       <div style="background:var(--paper);padding:.9rem 1rem;border-radius:var(--r);text-align:center">
@@ -818,7 +923,7 @@ function renderEmpTodayStatus(recId){
 function renderEmpTodayLog(recId){
   const todayE=DB.entries.filter(e=>e.recId===recId&&e.date===todayStr());
   const el=document.getElementById('emp-today-log');
-  if(!todayE.length){el.innerHTML='<p style="color:var(--ink3);font-size:.9rem">No shifts today.</p>';return}
+  if(!todayE.length){el.innerHTML=emptyState('No shifts today.');return}
   el.innerHTML=`<table class="tbl">
     <thead><tr><th>#</th><th>In</th><th>Out</th><th>Hours</th><th>Note</th></tr></thead>
     <tbody>${todayE.map((e,i)=>{
@@ -837,7 +942,7 @@ function renderEmpTodayLog(recId){
 function renderEmpWeekSummary(recId){
   const{start,end}=getWeekRange(0);
   const weekE=DB.entries.filter(e=>e.recId===recId&&inRange(e.date,start,end));
-  const total=weekE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  const total=sumHours(weekE);
   const days=[...new Set(weekE.map(e=>e.date))].length;
   document.getElementById('emp-week-summary').innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
@@ -903,9 +1008,9 @@ function renderManager(){
 
 function renderStats(){
   const active=DB.entries.filter(e=>e.date===todayStr()&&!e.out).length;
-  const todayH=DB.entries.filter(e=>e.date===todayStr()).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  const todayH=sumHours(DB.entries.filter(e=>e.date===todayStr()));
   const{start,end}=getWeekRange(0);
-  const weekH=DB.entries.filter(e=>inRange(e.date,start,end)).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  const weekH=sumHours(DB.entries.filter(e=>inRange(e.date,start,end)));
   document.getElementById('st-employees').textContent=DB.employees.length;
   document.getElementById('st-active').textContent=active;
   document.getElementById('st-today-h').textContent=Math.round(todayH*10)/10+'h';
@@ -914,12 +1019,11 @@ function renderStats(){
 
 function renderEmpRoster(){
   const el=document.getElementById('emp-roster');
-  if(!DB.employees.length){el.innerHTML='<p style="color:var(--ink3);font-size:.9rem;padding:.5rem 0">No employees. Add one to get started.</p>';return}
+  if(!DB.employees.length){el.innerHTML=emptyState('No employees. Add one to get started.','.5rem 0');return}
   el.innerHTML=DB.employees.map(emp=>{
-    const ac=getAC(emp.colorIdx);
-    const active=DB.entries.find(e=>e.recId===emp.id&&e.date===todayStr()&&!e.out);
+    const active=getOpenEntry(emp.id);
     return`<div class="emp-item">
-      <div class="avatar" style="background:${ac.bg};color:${ac.fg}">${getInitials(emp.name)}</div>
+      ${renderAvatar(emp)}
       <div class="emp-meta">
         <div class="emp-name-txt">${emp.name}</div>
         <div class="emp-id-txt">${emp.empId}</div>
@@ -934,14 +1038,13 @@ function renderEmpRoster(){
 function renderActiveNow(){
   const active=DB.entries.filter(e=>e.date===todayStr()&&!e.out);
   const el=document.getElementById('active-now-list');
-  if(!active.length){el.innerHTML='<p style="color:var(--ink3);font-size:.9rem;padding:.5rem 0">No employees currently clocked in.</p>';return}
+  if(!active.length){el.innerHTML=emptyState('No employees currently clocked in.','.5rem 0');return}
   el.innerHTML=active.map(e=>{
     const emp=getEmpById(e.recId);
     if(!emp)return'';
-    const ac=getAC(emp.colorIdx);
     const elapsed=calcH(e.in,nowTimeStr());
     return`<div class="emp-item">
-      <div class="avatar" style="background:${ac.bg};color:${ac.fg}">${getInitials(emp.name)}</div>
+      ${renderAvatar(emp)}
       <div class="emp-meta">
         <div class="emp-name-txt">${emp.name}</div>
         <div class="emp-id-txt">Since ${fmtTime(e.in)}</div>
@@ -956,9 +1059,7 @@ function renderActiveNow(){
 // ═══════════════════════════════════════════════
 function renderDailyReport(){
   const date=document.getElementById('daily-date-picker').value||todayStr();
-  const dayE=DB.entries.filter(e=>e.date===date);
-  const uniqueEmps=[...new Set(dayE.map(e=>e.recId))];
-  const totalH=dayE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  const{dayE,uniqueEmps,totalH,rows:rowData}=getDailyReportData(date);
 
   document.getElementById('daily-report-stats').innerHTML=`
     <div class="stat-tile accent-blue" style="box-shadow:none">
@@ -972,25 +1073,18 @@ function renderDailyReport(){
     </div>`;
 
   if(!dayE.length){
-    document.getElementById('daily-report-table').innerHTML='<p style="color:var(--ink3);font-size:.9rem;padding:1rem 0">No entries for '+fmtDate(date)+'.</p>';
+    document.getElementById('daily-report-table').innerHTML=emptyState('No entries for '+fmtDate(date)+'.','1rem 0');
     return;
   }
 
-  // Group by employee
-  const rows=uniqueEmps.map(recId=>{
-    const emp=getEmpById(recId);
-    if(!emp)return'';
-    const empE=dayE.filter(e=>e.recId===recId);
-    const empH=empE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
-    return`<tr>
+  const rows=rowData.map(({emp,empE,empH})=>`<tr>
       <td>${emp.name}</td>
       <td class="mono" style="color:var(--ink3)">${emp.empId}</td>
       <td class="mono">${empE.map(e=>fmtTime(e.in)).join(', ')}</td>
       <td class="mono">${empE.map(e=>e.out?fmtTime(e.out):'<span style="color:var(--amber)">Active</span>').join(', ')}</td>
       <td class="mono" style="font-weight:600">${fmtHours(empH)}</td>
       <td>${empE.some(e=>e.edited)?'<span class="badge badge-amber">Edited</span>':''}</td>
-    </tr>`;
-  }).join('');
+    </tr>`).join('');
 
   document.getElementById('daily-report-table').innerHTML=`
     <table class="tbl">
@@ -1001,18 +1095,12 @@ function renderDailyReport(){
 
 function printDaily(){
   const date=document.getElementById('daily-date-picker').value||todayStr();
-  const dayE=DB.entries.filter(e=>e.date===date);
-  const uniqueEmps=[...new Set(dayE.map(e=>e.recId))];
-  const totalH=dayE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
-  const rows=uniqueEmps.map(recId=>{
-    const emp=getEmpById(recId);
-    if(!emp)return'';
-    const empE=dayE.filter(e=>e.recId===recId);
-    const empH=empE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
-    return`<tr><td>${emp.name}</td><td>${emp.empId}</td><td>${empE.map(e=>fmtTime(e.in)).join(', ')}</td><td>${empE.map(e=>e.out?fmtTime(e.out):'Active').join(', ')}</td><td>${fmtHours(empH)}</td></tr>`;
-  }).join('');
+  const{uniqueEmps,totalH,rows:rowData}=getDailyReportData(date);
+  const rows=rowData.map(({emp,empE,empH})=>
+    `<tr><td>${emp.name}</td><td>${emp.empId}</td><td>${empE.map(e=>fmtTime(e.in)).join(', ')}</td><td>${empE.map(e=>e.out?fmtTime(e.out):'Active').join(', ')}</td><td>${fmtHours(empH)}</td></tr>`
+  ).join('');
   document.getElementById('print-shell').innerHTML=`
-    <style>table{width:100%;border-collapse:collapse}th,td{padding:8px 12px;border:1px solid #ccc;text-align:left}th{background:#f5f5f5}h2{margin-bottom:12px}p{margin-bottom:16px}</style>
+    ${printStyles()}
     <h2>ShiftDesk — Daily Report</h2>
     <p>${fmtDate(date)} &bull; ${uniqueEmps.length} employees &bull; ${Math.round(totalH*10)/10}h total</p>
     <table><thead><tr><th>Name</th><th>ID</th><th>In</th><th>Out</th><th>Hours</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -1023,57 +1111,38 @@ function printDaily(){
 //  WEEKLY REPORT
 // ═══════════════════════════════════════════════
 function renderWeeklyReport(){
-  const{start,end}=getWeekRange(weekOffset);
+  const{start,end,empData,days}=getWeeklyReportData(weekOffset);
   document.getElementById('week-range-lbl').textContent=fmtDate(start)+' — '+fmtDate(end);
-  const weekE=DB.entries.filter(e=>inRange(e.date,start,end));
-  const maxH=Math.max(...DB.employees.map(emp=>weekE.filter(e=>e.recId===emp.id).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0)),1);
+  const maxH=Math.max(...empData.map(d=>d.total),1);
 
-  // Bar chart
-  document.getElementById('weekly-bars').innerHTML=DB.employees.map(emp=>{
-    const empE=weekE.filter(e=>e.recId===emp.id);
-    const h=empE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
-    const pct=maxH>0?Math.min(h/maxH*100,100):0;
+  document.getElementById('weekly-bars').innerHTML=empData.map(({emp,total})=>{
+    const pct=maxH>0?Math.min(total/maxH*100,100):0;
     const ac=getAC(emp.colorIdx);
     return`<div class="week-bar-row">
       <div class="week-bar-name">${emp.name}</div>
       <div class="week-bar-track"><div class="week-bar-fill" style="width:${pct.toFixed(1)}%;background:${ac.fg}"></div></div>
-      <div class="week-bar-val">${fmtHours(h)}</div>
+      <div class="week-bar-val">${fmtHours(total)}</div>
     </div>`;
   }).join('');
 
-  // Table: one row per employee, columns = days of week
-  const days=[];
-  for(let i=0;i<7;i++){
-    const d=new Date(start);d.setDate(d.getDate()+i);
-    days.push(d.toISOString().slice(0,10));
-  }
   const dayLabels=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const thead=`<tr><th>Employee</th>${dayLabels.map((l,i)=>`<th>${l}<br><span style="font-weight:400;color:var(--ink4)">${days[i].slice(5)}</span></th>`).join('')}<th>Total</th></tr>`;
-  const tbody=DB.employees.map(emp=>{
-    const dayCells=days.map(day=>{
-      const dayE=weekE.filter(e=>e.recId===emp.id&&e.date===day);
-      const h=dayE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
-      return`<td class="mono">${h>0?fmtHours(h):'—'}</td>`;
-    });
-    const total=weekE.filter(e=>e.recId===emp.id).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  const tbody=empData.map(({emp,total,perDay})=>{
+    const dayCells=perDay.map(h=>`<td class="mono">${h>0?fmtHours(h):'—'}</td>`);
     return`<tr><td>${emp.name}</td>${dayCells.join('')}<td class="mono" style="font-weight:600">${fmtHours(total)}</td></tr>`;
   }).join('');
   document.getElementById('weekly-table').innerHTML=`<table class="tbl"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
 }
 
 function printWeekly(){
-  const{start,end}=getWeekRange(weekOffset);
-  const weekE=DB.entries.filter(e=>inRange(e.date,start,end));
-  const days=[];
-  for(let i=0;i<7;i++){const d=new Date(start);d.setDate(d.getDate()+i);days.push(d.toISOString().slice(0,10))}
+  const{start,end,days,empData}=getWeeklyReportData(weekOffset);
   const dl=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const rows=DB.employees.map(emp=>{
-    const cells=days.map(day=>{const h=weekE.filter(e=>e.recId===emp.id&&e.date===day).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);return`<td>${h>0?fmtHours(h):'—'}</td>`}).join('');
-    const total=weekE.filter(e=>e.recId===emp.id).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  const rows=empData.map(({emp,total,perDay})=>{
+    const cells=perDay.map(h=>`<td>${h>0?fmtHours(h):'—'}</td>`).join('');
     return`<tr><td>${emp.name}</td><td>${emp.empId}</td>${cells}<td><strong>${fmtHours(total)}</strong></td></tr>`;
   }).join('');
   document.getElementById('print-shell').innerHTML=`
-    <style>table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:6px 10px;border:1px solid #ccc;text-align:left}th{background:#f5f5f5}h2{margin-bottom:8px}p{margin-bottom:12px}</style>
+    ${printStyles()}
     <h2>ShiftDesk — Weekly Report</h2>
     <p>${fmtDate(start)} — ${fmtDate(end)}</p>
     <table><thead><tr><th>Employee</th><th>ID</th>${dl.map((l,i)=>`<th>${l} ${days[i].slice(5)}</th>`).join('')}<th>Total</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -1087,12 +1156,12 @@ function renderAllEntries(){
   const empFilter=document.getElementById('filter-emp-select').value;
   const dateFrom=document.getElementById('filter-date-from').value;
   const dateTo=document.getElementById('filter-date-to').value;
-  let entries=[...DB.entries].sort((a,b)=>(b.date+b.in).localeCompare(a.date+a.in));
+  let entries=sortEntriesDesc(DB.entries);
   if(empFilter)entries=entries.filter(e=>e.recId===empFilter);
   if(dateFrom)entries=entries.filter(e=>e.date>=dateFrom);
   if(dateTo)entries=entries.filter(e=>e.date<=dateTo);
   const el=document.getElementById('all-entries-table');
-  if(!entries.length){el.innerHTML='<p style="color:var(--ink3);font-size:.9rem;padding:1rem 0">No entries found for the selected filters.</p>';return}
+  if(!entries.length){el.innerHTML=emptyState('No entries found for the selected filters.','1rem 0');return}
   el.innerHTML=`<table class="tbl">
     <thead><tr><th>Date</th><th>Employee</th><th>ID</th><th>In</th><th>Out</th><th>Hours</th><th>Note</th></tr></thead>
     <tbody>${entries.map(e=>{
@@ -1116,10 +1185,10 @@ function renderAllEntries(){
 // ═══════════════════════════════════════════════
 function renderEditTable(){
   const empFilter=document.getElementById('edit-filter-emp').value;
-  let entries=[...DB.entries].sort((a,b)=>(b.date+b.in).localeCompare(a.date+a.in)).slice(0,80);
+  let entries=sortEntriesDesc(DB.entries).slice(0,80);
   if(empFilter)entries=entries.filter(e=>e.recId===empFilter);
   const el=document.getElementById('edit-entries-table');
-  if(!entries.length){el.innerHTML='<p style="color:var(--ink3);font-size:.9rem;padding:1rem 0">No entries.</p>';return}
+  if(!entries.length){el.innerHTML=emptyState('No entries.','1rem 0');return}
   el.innerHTML=`<table class="tbl">
     <thead><tr><th>Date</th><th>Employee</th><th>In</th><th>Out</th><th>Hours</th><th></th></tr></thead>
     <tbody>${entries.map(e=>{
