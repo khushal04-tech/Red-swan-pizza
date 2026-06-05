@@ -1,0 +1,13 @@
+{
+  "name": "red-swan-pizza",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ShiftDesk — Employee Time Clock",
+  "scripts": {
+    "test": "jest --coverage",
+    "test:watch": "jest --watch"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
