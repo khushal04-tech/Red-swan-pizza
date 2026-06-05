@@ -290,7 +290,7 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height
   </div>
   <div class="header-mode">
     <button class="mode-btn active" id="mode-emp-btn" onclick="setMode('employee')">Employee</button>
-    <button class="mode-btn" id="mode-mgr-btn" onclick="setMode('manager')">Manager</button>
+    <button class="mode-btn" id="mode-mgr-btn" onclick="setMode('manager')">🔒 Manager</button>
   </div>
   <div class="live-time" id="live-time">00:00:00</div>
 </header>
@@ -360,6 +360,12 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height
 
   <!-- ══════════════════ MANAGER VIEW ══════════════════ -->
   <div class="view" id="view-manager">
+
+    <!-- Manager Header Bar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div style="font-size:.82rem;color:var(--ink3);font-family:var(--mono)">🔓 Manager Mode</div>
+      <button class="btn btn-ghost btn-sm" onclick="lockManager()">🔒 Lock &amp; Exit</button>
+    </div>
 
     <!-- Stats Row -->
     <div class="grid-4" style="margin-bottom:1.5rem">
@@ -559,6 +565,22 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height
   </div>
 </div>
 
+<!-- MODAL: Manager Login -->
+<div class="modal-bg" id="modal-mgr-login">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">Manager Access<span>Enter PIN to continue</span></div>
+    <div class="field">
+      <label>Manager PIN</label>
+      <input type="password" id="mgr-pin-input" placeholder="Enter PIN" maxlength="20" autocomplete="off" onkeydown="if(event.key==='Enter')verifyManagerPin()">
+    </div>
+    <div id="mgr-pin-msg" style="margin-bottom:.5rem"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-mgr-login')">Cancel</button>
+      <button class="btn btn-amber" onclick="verifyManagerPin()">Unlock</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST CONTAINER -->
 <div id="toast"></div>
 
@@ -581,7 +603,11 @@ const AVATAR_COLORS = [
 function loadState(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
-    if(raw) return JSON.parse(raw);
+    if(raw){
+      const data=JSON.parse(raw);
+      if(!data.managerPin)data.managerPin='1234';
+      return data;
+    }
   }catch(e){
     console.error('Failed to load saved state from localStorage:', e);
     toast('Warning: Could not load saved data. Starting fresh.','error');
@@ -595,6 +621,7 @@ function loadState(){
     entries:[],
     nextEid:4,
     nextEntId:1,
+    managerPin:'1234',
   };
 }
 
@@ -740,12 +767,39 @@ startClock();
 // ═══════════════════════════════════════════════
 //  MODE SWITCH
 // ═══════════════════════════════════════════════
+let mgrAuthenticated=false;
 function setMode(m){
+  if(m==='manager'&&!mgrAuthenticated){
+    document.getElementById('mgr-pin-input').value='';
+    document.getElementById('mgr-pin-msg').innerHTML='';
+    openModal('modal-mgr-login');
+    setTimeout(()=>document.getElementById('mgr-pin-input').focus(),100);
+    return;
+  }
   document.getElementById('view-employee').classList.toggle('active',m==='employee');
   document.getElementById('view-manager').classList.toggle('active',m==='manager');
   document.getElementById('mode-emp-btn').classList.toggle('active',m==='employee');
   document.getElementById('mode-mgr-btn').classList.toggle('active',m==='manager');
   if(m==='manager')renderManager();
+  if(m==='employee')mgrAuthenticated=false;
+}
+function verifyManagerPin(){
+  const pin=document.getElementById('mgr-pin-input').value;
+  if(pin===DB.managerPin){
+    mgrAuthenticated=true;
+    closeModal('modal-mgr-login');
+    setMode('manager');
+    toast('Manager access granted.','success');
+  }else{
+    document.getElementById('mgr-pin-msg').innerHTML='<div class="alert" style="background:var(--red-lt);color:var(--red);border:1px solid rgba(192,52,42,.2);margin:0">Incorrect PIN. Please try again.</div>';
+    document.getElementById('mgr-pin-input').value='';
+    document.getElementById('mgr-pin-input').focus();
+  }
+}
+function lockManager(){
+  mgrAuthenticated=false;
+  setMode('employee');
+  toast('Manager view locked.','info');
 }
 
 // ═══════════════════════════════════════════════
