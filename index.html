@@ -582,7 +582,10 @@ function loadState(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
     if(raw) return JSON.parse(raw);
-  }catch(e){}
+  }catch(e){
+    console.error('Failed to load saved state from localStorage:', e);
+    toast('Warning: Could not load saved data. Starting fresh.','error');
+  }
   return {
     employees:[
       {id:'e1',name:'Meet',empId:'001',colorIdx:0},
@@ -595,7 +598,14 @@ function loadState(){
   };
 }
 
-function saveState(){localStorage.setItem(STORE_KEY,JSON.stringify(DB))}
+function saveState(){
+  try{
+    localStorage.setItem(STORE_KEY,JSON.stringify(DB));
+  }catch(e){
+    console.error('Failed to save state to localStorage:', e);
+    toast('Error: Could not save data. Storage may be full.','error');
+  }
+}
 let DB = loadState();
 
 // ═══════════════════════════════════════════════
@@ -624,10 +634,17 @@ function calcH(inT,outT){
   if(!inT||!outT)return null;
   const[ih,im]=inT.split(':').map(Number);
   const[oh,om]=outT.split(':').map(Number);
+  if([ih,im,oh,om].some(v=>isNaN(v)))return null;
   const diff=(oh*60+om)-(ih*60+im);
+  if(diff<0)return null;
   return diff/60;
 }
-function getInitials(name){return name.split(' ').map(p=>p[0]).join('').toUpperCase().slice(0,2)}
+function getInitials(name){
+  if(!name)return'?';
+  const parts=name.trim().split(' ').filter(p=>p.length>0);
+  if(!parts.length)return'?';
+  return parts.map(p=>p[0]).join('').toUpperCase().slice(0,2);
+}
 function getAC(idx){return AVATAR_COLORS[idx%AVATAR_COLORS.length]}
 
 function getWeekRange(offset=0){
@@ -754,7 +771,9 @@ function getCurrentEmp(){
 
 function doPunchIn(){
   const emp=getCurrentEmp();
-  if(!emp)return;
+  if(!emp){toast('Cannot clock in: employee not verified.','error');return}
+  const existing=DB.entries.find(e=>e.recId===emp.id&&e.date===todayStr()&&!e.out);
+  if(existing){toast('Already clocked in. Please clock out first.','error');return}
   DB.entries.push({id:uid(),recId:emp.id,date:todayStr(),in:nowTimeStr(),out:null,edited:false});
   saveState();
   verifyAndUpdateEmpStatus();
@@ -763,9 +782,9 @@ function doPunchIn(){
 
 function doPunchOut(){
   const emp=getCurrentEmp();
-  if(!emp)return;
+  if(!emp){toast('Cannot clock out: employee not verified.','error');return}
   const entry=DB.entries.find(e=>e.recId===emp.id&&e.date===todayStr()&&!e.out);
-  if(!entry)return;
+  if(!entry){toast('No active shift found to clock out of.','error');return}
   entry.out=nowTimeStr();
   saveState();
   verifyAndUpdateEmpStatus();
@@ -775,6 +794,7 @@ function doPunchOut(){
 
 function renderEmpTodayStatus(recId){
   const emp=getEmpById(recId);
+  if(!emp){console.warn('renderEmpTodayStatus: employee not found for id', recId);return}
   const todayE=DB.entries.filter(e=>e.recId===recId&&e.date===todayStr());
   const total=todayE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
   const open=todayE.find(e=>!e.out);
@@ -842,6 +862,7 @@ function renderEmpWeekSummary(recId){
 let _lastReceiptHtml='';
 function showReceipt(entry){
   const emp=getEmpById(entry.recId);
+  if(!emp){toast('Cannot display receipt: employee data not found.','error');return}
   const h=calcH(entry.in,entry.out);
   const now=new Date();
   _lastReceiptHtml=`<div class="receipt">
@@ -1118,7 +1139,7 @@ function renderEditTable(){
 
 function loadEntryForEdit(entryId){
   const entry=DB.entries.find(e=>e.id===entryId);
-  if(!entry)return;
+  if(!entry){toast('Entry not found. It may have been deleted.','error');return}
   document.getElementById('edit-emp-sel').value=entry.recId;
   document.getElementById('edit-date-in').value=entry.date;
   document.getElementById('edit-time-in').value=entry.in;
@@ -1180,6 +1201,7 @@ function openAddEmpModal(){
 
 function openEditEmpModal(id){
   const emp=getEmpById(id);
+  if(!emp){toast('Employee not found.','error');return}
   document.getElementById('modal-emp-heading').textContent='Edit — '+emp.name;
   document.getElementById('memp-name').value=emp.name;
   document.getElementById('memp-id').value=emp.empId;
@@ -1199,6 +1221,7 @@ function saveEmployee(){
 
   if(recId){
     const emp=getEmpById(recId);
+    if(!emp){toast('Employee not found. They may have been removed.','error');return}
     emp.name=name;emp.empId=empId;
   }else{
     DB.employees.push({id:'e'+DB.nextEid++,name,empId,colorIdx:DB.employees.length%AVATAR_COLORS.length});
@@ -1211,6 +1234,7 @@ function saveEmployee(){
 
 function openRemoveEmpModal(id){
   const emp=getEmpById(id);
+  if(!emp){toast('Employee not found.','error');return}
   document.getElementById('remove-emp-name-lbl').textContent=' — '+emp.name;
   document.getElementById('remove-emp-id').value=id;
   openModal('modal-remove-emp');
