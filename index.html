@@ -292,7 +292,13 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height
     <button class="mode-btn active" id="mode-emp-btn" onclick="setMode('employee')">Employee</button>
     <button class="mode-btn" id="mode-mgr-btn" onclick="setMode('manager')">Manager</button>
   </div>
-  <div class="live-time" id="live-time">00:00:00</div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div id="mgr-badge" style="display:none;font-size:.72rem;color:var(--green-md);font-family:var(--mono);letter-spacing:.04em">
+      <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green-md);margin-right:4px"></span>
+      <span id="mgr-badge-name"></span>
+    </div>
+    <div class="live-time" id="live-time">00:00:00</div>
+  </div>
 </header>
 
 <!-- VIEWS -->
@@ -386,8 +392,13 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height
       <button class="tab-btn active" onclick="mgTab('employees',this)">Employees</button>
       <button class="tab-btn" onclick="mgTab('daily',this)">Daily Report</button>
       <button class="tab-btn" onclick="mgTab('weekly',this)">Weekly Report</button>
+      <button class="tab-btn" onclick="mgTab('yearly',this)">Yearly Report</button>
       <button class="tab-btn" onclick="mgTab('entries',this)">All Entries</button>
       <button class="tab-btn" onclick="mgTab('editentry',this)">Edit Hours</button>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:.5rem">
+        <button class="btn btn-ghost btn-sm" onclick="openModal('modal-printer')" title="Printer Settings">🖨 Printer</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="doMgrLogout()" title="Logout">Logout</button>
+      </div>
     </div>
 
     <!-- ── TAB: Employees ── -->
@@ -436,6 +447,23 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height
         </div>
         <div id="weekly-bars" style="margin-bottom:1.5rem"></div>
         <div class="tbl-wrap"><div id="weekly-table"></div></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: Yearly Report ── -->
+    <div class="tab-panel" id="tp-yearly">
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">Yearly Report</span>
+          <div style="display:flex;align-items:center;gap:.75rem">
+            <button class="btn btn-ghost btn-sm" onclick="yearlyYear--;renderYearlyReport()">‹ Prev</button>
+            <span id="yearly-year-lbl" style="font-family:var(--mono);font-size:.85rem;font-weight:600;color:var(--ink)"></span>
+            <button class="btn btn-ghost btn-sm" onclick="yearlyYear++;renderYearlyReport()">Next ›</button>
+            <button class="btn btn-ghost btn-sm" onclick="printYearly()">🖨 Print</button>
+          </div>
+        </div>
+        <div id="yearly-summary-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1rem;margin-bottom:1.5rem"></div>
+        <div class="tbl-wrap"><div id="yearly-table"></div></div>
       </div>
     </div>
 
@@ -559,6 +587,59 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height
   </div>
 </div>
 
+<!-- MODAL: Manager Login -->
+<div class="modal-bg" id="modal-mgr-login">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">Manager Access<span>Enter your credentials to continue</span></div>
+    <div class="field"><label>Manager Name</label><input type="text" id="mgr-login-name" placeholder="Manager name" autocomplete="off"></div>
+    <div class="field"><label>Password</label><input type="password" id="mgr-login-pass" placeholder="Password" autocomplete="off"></div>
+    <div id="mgr-login-err" style="margin-bottom:.5rem"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="cancelMgrLogin()">Cancel</button>
+      <button class="btn btn-amber" onclick="doMgrLogin()">Login</button>
+    </div>
+    <hr class="sep">
+    <details style="font-size:.8rem;color:var(--ink3)">
+      <summary style="cursor:pointer;font-weight:600">First-time setup?</summary>
+      <p style="margin-top:.5rem">If no manager account exists, enter a new name and password to create one. The first login auto-creates the manager account.</p>
+    </details>
+  </div>
+</div>
+
+<!-- MODAL: Printer Settings -->
+<div class="modal-bg" id="modal-printer">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">Printer Settings<span>Configure your receipt printer</span></div>
+    <div class="field">
+      <label>Printer Connection</label>
+      <select id="printer-type-sel">
+        <option value="browser">Browser Default (window.print)</option>
+        <option value="thermal">Thermal / Receipt Printer (ESC/POS)</option>
+      </select>
+    </div>
+    <div id="printer-thermal-opts" style="display:none">
+      <div class="alert alert-info">For thermal printers, ensure your printer is connected via USB and accessible. The system uses the Web Serial API when available.</div>
+      <div class="field">
+        <label>Paper Width</label>
+        <select id="printer-paper-w">
+          <option value="58">58mm (2.25")</option>
+          <option value="80" selected>80mm (3.125")</option>
+        </select>
+      </div>
+      <button class="btn btn-ghost btn-sm btn-full" onclick="testPrinterConnection()" style="margin-bottom:1rem">Test Printer Connection</button>
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:10px;flex-direction:row">
+      <input type="checkbox" id="auto-print-chk" style="width:18px;height:18px;accent-color:var(--amber)">
+      <label style="margin:0;cursor:pointer" for="auto-print-chk">Auto-print receipt when employee clocks out</label>
+    </div>
+    <div id="printer-status" style="margin-top:.5rem"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-printer')">Cancel</button>
+      <button class="btn btn-amber" onclick="savePrinterSettings()">Save Settings</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST CONTAINER -->
 <div id="toast"></div>
 
@@ -570,6 +651,8 @@ body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height
 //  DATA
 // ═══════════════════════════════════════════════
 const STORE_KEY = 'shiftdesk_v1';
+const MGR_STORE_KEY = 'shiftdesk_mgr';
+const PRINTER_STORE_KEY = 'shiftdesk_printer';
 
 const AVATAR_COLORS = [
   {bg:'#e8f0fb',fg:'#1a4a7a'},{bg:'#e8f5ee',fg:'#1a7a4a'},
@@ -597,6 +680,24 @@ function loadState(){
 
 function saveState(){localStorage.setItem(STORE_KEY,JSON.stringify(DB))}
 let DB = loadState();
+
+// Manager credentials (stored separately)
+function loadMgrCreds(){
+  try{const raw=localStorage.getItem(MGR_STORE_KEY);if(raw)return JSON.parse(raw)}catch(e){}
+  return {managers:[]};
+}
+function saveMgrCreds(){localStorage.setItem(MGR_STORE_KEY,JSON.stringify(mgrCreds))}
+let mgrCreds=loadMgrCreds();
+let mgrLoggedIn=false;
+let mgrCurrentName='';
+
+// Printer settings
+function loadPrinterSettings(){
+  try{const raw=localStorage.getItem(PRINTER_STORE_KEY);if(raw)return JSON.parse(raw)}catch(e){}
+  return {type:'browser',paperWidth:80,autoPrint:true};
+}
+function savePrinterSettingsData(){localStorage.setItem(PRINTER_STORE_KEY,JSON.stringify(printerSettings))}
+let printerSettings=loadPrinterSettings();
 
 // ═══════════════════════════════════════════════
 //  UTILS
@@ -671,12 +772,91 @@ startClock();
 //  MODE SWITCH
 // ═══════════════════════════════════════════════
 function setMode(m){
+  if(m==='manager'&&!mgrLoggedIn){
+    openModal('modal-mgr-login');
+    document.getElementById('mgr-login-name').value='';
+    document.getElementById('mgr-login-pass').value='';
+    document.getElementById('mgr-login-err').innerHTML='';
+    setTimeout(()=>document.getElementById('mgr-login-name').focus(),100);
+    return;
+  }
   document.getElementById('view-employee').classList.toggle('active',m==='employee');
   document.getElementById('view-manager').classList.toggle('active',m==='manager');
   document.getElementById('mode-emp-btn').classList.toggle('active',m==='employee');
   document.getElementById('mode-mgr-btn').classList.toggle('active',m==='manager');
   if(m==='manager')renderManager();
+  if(m==='employee'){
+    document.getElementById('mgr-badge').style.display='none';
+  }
 }
+
+// ═══════════════════════════════════════════════
+//  MANAGER AUTH
+// ═══════════════════════════════════════════════
+function hashPassword(pass){
+  let h=0;
+  for(let i=0;i<pass.length;i++){h=((h<<5)-h)+pass.charCodeAt(i);h|=0}
+  return 'h_'+Math.abs(h).toString(36);
+}
+
+function doMgrLogin(){
+  const name=document.getElementById('mgr-login-name').value.trim();
+  const pass=document.getElementById('mgr-login-pass').value;
+  const errEl=document.getElementById('mgr-login-err');
+
+  if(!name||!pass){
+    errEl.innerHTML='<div class="alert" style="background:var(--red-lt);color:var(--red);border:1px solid rgba(192,52,42,.15);margin:0">Please enter both name and password.</div>';
+    return;
+  }
+
+  const hashed=hashPassword(pass);
+
+  if(mgrCreds.managers.length===0){
+    mgrCreds.managers.push({name,passHash:hashed});
+    saveMgrCreds();
+    mgrLoggedIn=true;
+    mgrCurrentName=name;
+    closeModal('modal-mgr-login');
+    updateMgrBadge();
+    setMode('manager');
+    toast('Manager account created for '+name+'.','success');
+    return;
+  }
+
+  const mgr=mgrCreds.managers.find(m=>m.name.toLowerCase()===name.toLowerCase()&&m.passHash===hashed);
+  if(mgr){
+    mgrLoggedIn=true;
+    mgrCurrentName=mgr.name;
+    closeModal('modal-mgr-login');
+    updateMgrBadge();
+    setMode('manager');
+    toast('Welcome back, '+mgr.name+'!','success');
+  }else{
+    errEl.innerHTML='<div class="alert" style="background:var(--red-lt);color:var(--red);border:1px solid rgba(192,52,42,.15);margin:0">Invalid name or password.</div>';
+  }
+}
+
+function cancelMgrLogin(){
+  closeModal('modal-mgr-login');
+}
+
+function doMgrLogout(){
+  mgrLoggedIn=false;
+  mgrCurrentName='';
+  document.getElementById('mgr-badge').style.display='none';
+  setMode('employee');
+  toast('Manager logged out.','info');
+}
+
+function updateMgrBadge(){
+  const badge=document.getElementById('mgr-badge');
+  badge.style.display='flex';
+  document.getElementById('mgr-badge-name').textContent=mgrCurrentName;
+}
+
+// Allow Enter key in login modal
+document.getElementById('mgr-login-pass').addEventListener('keydown',function(e){if(e.key==='Enter')doMgrLogin()});
+document.getElementById('mgr-login-name').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('mgr-login-pass').focus()});
 
 // ═══════════════════════════════════════════════
 //  MANAGER TABS
@@ -688,6 +868,7 @@ function mgTab(name,el){
   document.getElementById('tp-'+name).classList.add('active');
   if(name==='daily')renderDailyReport();
   if(name==='weekly')renderWeeklyReport();
+  if(name==='yearly')renderYearlyReport();
   if(name==='entries')renderAllEntries();
   if(name==='editentry'){renderEditTable();populateEmpSelects()}
 }
@@ -770,7 +951,12 @@ function doPunchOut(){
   saveState();
   verifyAndUpdateEmpStatus();
   showReceipt(entry);
-  toast('Clocked out. Receipt ready.','info');
+  if(printerSettings.autoPrint){
+    setTimeout(()=>doPrintReceipt(),400);
+    toast('Clocked out. Receipt printing...','info');
+  }else{
+    toast('Clocked out. Receipt ready.','info');
+  }
 }
 
 function renderEmpTodayStatus(recId){
@@ -1241,6 +1427,135 @@ function confirmDelEntry(){
 }
 
 // ═══════════════════════════════════════════════
+//  YEARLY REPORT
+// ═══════════════════════════════════════════════
+let yearlyYear=new Date().getFullYear();
+
+function renderYearlyReport(){
+  const year=yearlyYear;
+  document.getElementById('yearly-year-lbl').textContent=year;
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const yearStart=year+'-01-01';
+  const yearEnd=year+'-12-31';
+  const yearE=DB.entries.filter(e=>e.date>=yearStart&&e.date<=yearEnd);
+  const totalH=yearE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  const uniqueEmps=[...new Set(yearE.map(e=>e.recId))];
+  const totalShifts=yearE.length;
+  const avgPerEmp=uniqueEmps.length>0?totalH/uniqueEmps.length:0;
+
+  document.getElementById('yearly-summary-stats').innerHTML=`
+    <div class="stat-tile accent-amber" style="box-shadow:none">
+      <div class="stat-val">${Math.round(totalH*10)/10}h</div><div class="stat-lbl">Total Hours</div>
+    </div>
+    <div class="stat-tile accent-green" style="box-shadow:none">
+      <div class="stat-val">${uniqueEmps.length}</div><div class="stat-lbl">Employees</div>
+    </div>
+    <div class="stat-tile accent-blue" style="box-shadow:none">
+      <div class="stat-val">${totalShifts}</div><div class="stat-lbl">Total Shifts</div>
+    </div>
+    <div class="stat-tile" style="box-shadow:none;border-left:3px solid var(--ink4)">
+      <div class="stat-val">${fmtHours(avgPerEmp)}</div><div class="stat-lbl">Avg / Employee</div>
+    </div>`;
+
+  const thead=`<tr><th>Employee</th><th>ID</th>${months.map(m=>`<th>${m}</th>`).join('')}<th>Total</th></tr>`;
+  const tbody=DB.employees.map(emp=>{
+    const monthCells=months.map((_,mi)=>{
+      const mStart=year+'-'+pad(mi+1)+'-01';
+      const mEnd=year+'-'+pad(mi+1)+'-31';
+      const mE=yearE.filter(e=>e.recId===emp.id&&e.date>=mStart&&e.date<=mEnd);
+      const h=mE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+      return`<td class="mono">${h>0?fmtHours(h):'—'}</td>`;
+    });
+    const empTotal=yearE.filter(e=>e.recId===emp.id).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+    return`<tr><td>${emp.name}</td><td class="mono" style="color:var(--ink3)">${emp.empId}</td>${monthCells.join('')}<td class="mono" style="font-weight:600">${fmtHours(empTotal)}</td></tr>`;
+  }).join('');
+
+  const grandTotal=yearE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+  const footerCells=months.map((_,mi)=>{
+    const mStart=year+'-'+pad(mi+1)+'-01';
+    const mEnd=year+'-'+pad(mi+1)+'-31';
+    const mH=yearE.filter(e=>e.date>=mStart&&e.date<=mEnd).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+    return`<td class="mono" style="font-weight:600;color:var(--amber)">${mH>0?fmtHours(mH):'—'}</td>`;
+  }).join('');
+
+  document.getElementById('yearly-table').innerHTML=`
+    <table class="tbl">
+      <thead>${thead}</thead>
+      <tbody>${tbody}</tbody>
+      <tfoot><tr style="border-top:2px solid var(--line)"><td style="font-weight:700">Total</td><td></td>${footerCells}<td class="mono" style="font-weight:700;color:var(--amber)">${fmtHours(grandTotal)}</td></tr></tfoot>
+    </table>`;
+}
+
+function printYearly(){
+  const year=yearlyYear;
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const yearStart=year+'-01-01';
+  const yearEnd=year+'-12-31';
+  const yearE=DB.entries.filter(e=>e.date>=yearStart&&e.date<=yearEnd);
+  const totalH=yearE.reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+
+  const thead=`<tr><th>Employee</th><th>ID</th>${months.map(m=>`<th>${m}</th>`).join('')}<th>Total</th></tr>`;
+  const tbody=DB.employees.map(emp=>{
+    const monthCells=months.map((_,mi)=>{
+      const mStart=year+'-'+pad(mi+1)+'-01';
+      const mEnd=year+'-'+pad(mi+1)+'-31';
+      const h=yearE.filter(e=>e.recId===emp.id&&e.date>=mStart&&e.date<=mEnd).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+      return`<td>${h>0?fmtHours(h):'—'}</td>`;
+    });
+    const empTotal=yearE.filter(e=>e.recId===emp.id).reduce((s,e)=>s+(calcH(e.in,e.out)||0),0);
+    return`<tr><td>${emp.name}</td><td>${emp.empId}</td>${monthCells.join('')}<td><strong>${fmtHours(empTotal)}</strong></td></tr>`;
+  }).join('');
+
+  document.getElementById('print-shell').innerHTML=`
+    <style>table{width:100%;border-collapse:collapse;font-size:10px}th,td{padding:4px 6px;border:1px solid #ccc;text-align:left}th{background:#f5f5f5}h2{margin-bottom:8px}p{margin-bottom:12px}</style>
+    <h2>ShiftDesk — Yearly Report</h2>
+    <p>Year: ${year} &bull; Total Hours: ${Math.round(totalH*10)/10}h</p>
+    <table><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+  window.print();
+}
+
+// ═══════════════════════════════════════════════
+//  PRINTER SETTINGS
+// ═══════════════════════════════════════════════
+function initPrinterModal(){
+  document.getElementById('printer-type-sel').value=printerSettings.type;
+  document.getElementById('printer-paper-w').value=printerSettings.paperWidth;
+  document.getElementById('auto-print-chk').checked=printerSettings.autoPrint;
+  toggleThermalOpts();
+}
+
+document.getElementById('printer-type-sel').addEventListener('change',toggleThermalOpts);
+
+function toggleThermalOpts(){
+  const isThermal=document.getElementById('printer-type-sel').value==='thermal';
+  document.getElementById('printer-thermal-opts').style.display=isThermal?'block':'none';
+}
+
+function savePrinterSettings(){
+  printerSettings.type=document.getElementById('printer-type-sel').value;
+  printerSettings.paperWidth=parseInt(document.getElementById('printer-paper-w').value);
+  printerSettings.autoPrint=document.getElementById('auto-print-chk').checked;
+  savePrinterSettingsData();
+  closeModal('modal-printer');
+  toast('Printer settings saved.','success');
+}
+
+function testPrinterConnection(){
+  const status=document.getElementById('printer-status');
+  if('serial' in navigator){
+    status.innerHTML='<div class="alert alert-info">Web Serial API available. Click the button below to pair your printer.</div>';
+    navigator.serial.requestPort().then(port=>{
+      status.innerHTML='<div class="alert alert-success">Printer connected successfully! Port selected.</div>';
+      toast('Printer connected.','success');
+    }).catch(err=>{
+      status.innerHTML='<div class="alert" style="background:var(--amber-lt);color:var(--amber);border:1px solid rgba(200,116,10,.2)">No printer selected. Please try again.</div>';
+    });
+  }else{
+    status.innerHTML='<div class="alert" style="background:var(--amber-lt);color:var(--amber);border:1px solid rgba(200,116,10,.2)">Web Serial API not supported in this browser. Use Browser Default printing instead.</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════
 //  POPULATE SELECTS
 // ═══════════════════════════════════════════════
 function populateEmpSelects(){
@@ -1282,6 +1597,7 @@ function toast(msg,type='info'){
 populateEmpSelects();
 document.getElementById('edit-date-in').value=todayStr();
 document.getElementById('daily-date-picker').value=todayStr();
+initPrinterModal();
 </script>
 </body>
 </html>
